@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../obd/obd_parser.dart';
 import '../obd/obd_simulator.dart';
 import '../obd/obd_telemetry.dart';
+import '../database/database.dart';
+import '../database/database_provider.dart';
+import '../../features/settings/presentation/settings_provider.dart';
 
 enum ObdStatus {
   disconnected,
@@ -63,10 +67,12 @@ class ObdState {
 }
 
 class ObdService extends StateNotifier<ObdState> {
+  final Ref _ref;
   final ObdSimulator _simulator = ObdSimulator();
   BluetoothConnection? _connection;
   StreamSubscription? _simSubscription;
   Timer? _pollingTimer;
+  Timer? _autoReconnectTimer;
   Completer<String>? _pendingResponseCompleter;
 
   final StringBuffer _rxBuffer = StringBuffer();
@@ -77,32 +83,64 @@ class ObdService extends StateNotifier<ObdState> {
 
   static const int _responseTimeoutMs = 3000;
 
-  ObdService() : super(ObdState.initial()) {
-    if (state.isSimulatorMode) {
-      _startSimulation();
-    } else {
-      _autoConnect();
-    }
+  ObdService(this._ref) : super(ObdState.initial()) {
+    Future.microtask(() {
+      if (state.isSimulatorMode) {
+        _startSimulation();
+      } else {
+        _autoConnect();
+      }
+      _startAutoReconnectTimer();
+    });
   }
 
-  static const String _lastDeviceAddressKey = 'last_obd_device_address';
+  void _startAutoReconnectTimer() {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      return;
+    }
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+      try {
+        final db = _ref.read(databaseProvider);
+        final autoConnectOBD = await db.getBoolPreference('auto_connect_obd') ?? true;
+        final isSimulatorMode = await db.getBoolPreference('is_simulator_mode') ?? false;
+
+        if (autoConnectOBD &&
+            !isSimulatorMode &&
+            (state.status == ObdStatus.disconnected || state.status == ObdStatus.error)) {
+          _autoConnect();
+        }
+      } catch (e) {
+        debugPrint('Auto-reconnect check failed: $e');
+      }
+    });
+  }
 
   Future<void> _autoConnect() async {
+    if (state.status == ObdStatus.connecting || state.status == ObdStatus.initializing) {
+      return;
+    }
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastAddress = prefs.getString(_lastDeviceAddressKey);
-      if (lastAddress != null && lastAddress.isNotEmpty) {
-        debugPrint('Auto-connecting to last device: $lastAddress');
-        // Retrieve device name if possible, or just create a dummy one
-        final bondedDevices = await getPairedDevices();
-        BluetoothDevice? targetDevice;
-        try {
-           targetDevice = bondedDevices.firstWhere((d) => d.address == lastAddress);
-        } catch (_) {}
-        
-        if (targetDevice != null) {
-          await connectToDevice(targetDevice);
-        }
+      final db = _ref.read(databaseProvider);
+      final lastAddress = await db.getPreference('last_obd_device_address') ?? "";
+      if (lastAddress.isEmpty) return;
+
+      final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
+      if (isEnabled != true) return;
+
+      final connectGranted = await Permission.bluetoothConnect.isGranted;
+      if (!connectGranted) return;
+
+      debugPrint('Auto-connecting to last device: $lastAddress');
+      // Retrieve device name if possible, or just create a dummy one
+      final bondedDevices = await getPairedDevices();
+      BluetoothDevice? targetDevice;
+      try {
+         targetDevice = bondedDevices.firstWhere((d) => d.address == lastAddress);
+      } catch (_) {}
+      
+      if (targetDevice != null) {
+        await connectToDevice(targetDevice);
       }
     } catch (e) {
       debugPrint('Auto-connect failed: $e');
@@ -179,8 +217,7 @@ class ObdService extends StateNotifier<ObdState> {
         state = state.copyWith(status: ObdStatus.connected);
         
         // Save the address for future auto-connect
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_lastDeviceAddressKey, device.address);
+        _ref.read(settingsProvider.notifier).updateLastOBDAddress(device.address);
 
         _startPolling();
         return;
@@ -403,6 +440,8 @@ class ObdService extends StateNotifier<ObdState> {
 
   @override
   void dispose() {
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
     _stopSimulation();
     _disconnectReal();
     super.dispose();
@@ -410,7 +449,7 @@ class ObdService extends StateNotifier<ObdState> {
 }
 
 final obdServiceProvider = StateNotifierProvider<ObdService, ObdState>((ref) {
-  return ObdService();
+  return ObdService(ref);
 });
 
 final pairedDevicesProvider = FutureProvider.autoDispose<List<BluetoothDevice>>((ref) async {

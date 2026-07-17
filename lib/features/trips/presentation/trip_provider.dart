@@ -93,6 +93,7 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
   int _activeTripId = -1;
   DateTime? _lastTickTime;
   SharedPreferences? _prefs;
+  String _currentTripBDate = '';
 
   TripRecorderNotifier(this._ref) : super(TripRecorderState.initial()) {
     _initTrips();
@@ -115,19 +116,43 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
   }
 
   Future<void> _initTrips() async {
+    final db = _ref.read(databaseProvider);
     _prefs = await SharedPreferences.getInstance();
-    final tripA = _prefs!.getDouble('trip_a_distance') ?? 0.0;
+
+    // 1. Try loading from SQLite
+    double? tripA = await db.getDoublePreference('trip_a_distance');
+    double? tripB = await db.getDoublePreference('trip_b_distance');
+    String? tripBDate = await db.getPreference('trip_b_date');
     
-    // Check if Trip B date is today
-    final tripBDate = _prefs!.getString('trip_b_date') ?? '';
     final todayStr = _getTodayDateString();
-    double tripB = 0.0;
-    if (tripBDate == todayStr) {
-      tripB = _prefs!.getDouble('trip_b_distance') ?? 0.0;
-    } else {
-      await _prefs!.setString('trip_b_date', todayStr);
-      await _prefs!.setDouble('trip_b_distance', 0.0);
+
+    // 2. Legacy fallback to SharedPreferences if null
+    if (tripA == null) {
+      tripA = _prefs!.getDouble('trip_a_distance') ?? 0.0;
+      await db.setDoublePreference('trip_a_distance', tripA);
     }
+    if (tripBDate == null) {
+      tripBDate = _prefs!.getString('trip_b_date') ?? todayStr;
+      await db.setPreference('trip_b_date', tripBDate);
+    }
+    if (tripB == null) {
+      if (tripBDate == todayStr) {
+        tripB = _prefs!.getDouble('trip_b_distance') ?? 0.0;
+      } else {
+        tripB = 0.0;
+      }
+      await db.setDoublePreference('trip_b_distance', tripB);
+    }
+
+    // 3. Roll over if dates differ
+    if (tripBDate != todayStr) {
+      tripB = 0.0;
+      tripBDate = todayStr;
+      await db.setPreference('trip_b_date', todayStr);
+      await db.setDoublePreference('trip_b_distance', 0.0);
+    }
+
+    _currentTripBDate = tripBDate;
 
     state = state.copyWith(
       tripADistance: tripA,
@@ -141,7 +166,8 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
   }
 
   Future<void> resetTripA() async {
-    await _prefs?.setDouble('trip_a_distance', 0.0);
+    final db = _ref.read(databaseProvider);
+    await db.setDoublePreference('trip_a_distance', 0.0);
     state = state.copyWith(tripADistance: 0.0);
   }
 
@@ -213,17 +239,18 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     
     // Verify Trip B date hasn't rolled over during execution
     final todayStr = _getTodayDateString();
-    final savedDate = _prefs?.getString('trip_b_date') ?? todayStr;
     double newTripB;
-    if (savedDate == todayStr) {
+    final db = _ref.read(databaseProvider);
+    if (_currentTripBDate == todayStr) {
       newTripB = state.tripBDistance + distanceDelta;
     } else {
       newTripB = distanceDelta;
-      _prefs?.setString('trip_b_date', todayStr);
+      _currentTripBDate = todayStr;
+      db.setPreference('trip_b_date', todayStr);
     }
 
-    _prefs?.setDouble('trip_a_distance', newTripA);
-    _prefs?.setDouble('trip_b_distance', newTripB);
+    db.setDoublePreference('trip_a_distance', newTripA);
+    db.setDoublePreference('trip_b_distance', newTripB);
 
     state = state.copyWith(
       currentTripDistance: newDistance,
@@ -238,7 +265,6 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     );
 
     // Save trip point to DB for plotting charts
-    final db = _ref.read(databaseProvider);
     db.into(db.tripPoints).insert(
       TripPointsCompanion.insert(
         tripId: _activeTripId,

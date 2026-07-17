@@ -69,8 +69,11 @@ class DtcLogs extends Table {
 }
 
 class UserPreferences extends Table {
-  TextColumn get key => text().withLength(min: 1, max: 100).customConstraint('PRIMARY KEY')();
+  TextColumn get key => text().withLength(min: 1, max: 100)();
   TextColumn get value => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
 }
 
 @DriftDatabase(tables: [Vehicles, Trips, TripPoints, FuelLogs, MaintenanceLogs, DtcLogs, UserPreferences])

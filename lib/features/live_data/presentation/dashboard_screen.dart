@@ -5,11 +5,7 @@ import '../../../core/bluetooth/obd_service.dart';
 import '../../../core/obd/obd_telemetry.dart';
 import 'widgets/gauge_widget.dart';
 import '../../trips/presentation/trip_provider.dart';
-
-final leftGaugeMetricProvider = StateProvider<ObdMetricType>((ref) => ObdMetricType.rpm);
-final rightGaugeMetricProvider = StateProvider<ObdMetricType>((ref) => ObdMetricType.speed);
-
-final fullscreenProvider = StateProvider<bool>((ref) => false);
+import '../../settings/presentation/settings_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -92,22 +88,22 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                       ),
                       onTap: () {
-                        final leftVal = ref.read(leftGaugeMetricProvider);
-                        final rightVal = ref.read(rightGaugeMetricProvider);
+                        final leftVal = ref.read(settingsProvider).leftMetric;
+                        final rightVal = ref.read(settingsProvider).rightMetric;
 
                         if (isLeft) {
                           if (config.type == rightVal) {
-                            ref.read(leftGaugeMetricProvider.notifier).state = config.type;
-                            ref.read(rightGaugeMetricProvider.notifier).state = leftVal;
+                            ref.read(settingsProvider.notifier).updateLeftMetric(config.type);
+                            ref.read(settingsProvider.notifier).updateRightMetric(leftVal);
                           } else {
-                            ref.read(leftGaugeMetricProvider.notifier).state = config.type;
+                            ref.read(settingsProvider.notifier).updateLeftMetric(config.type);
                           }
                         } else {
                           if (config.type == leftVal) {
-                            ref.read(rightGaugeMetricProvider.notifier).state = config.type;
-                            ref.read(leftGaugeMetricProvider.notifier).state = rightVal;
+                            ref.read(settingsProvider.notifier).updateRightMetric(config.type);
+                            ref.read(settingsProvider.notifier).updateLeftMetric(rightVal);
                           } else {
-                            ref.read(rightGaugeMetricProvider.notifier).state = config.type;
+                            ref.read(settingsProvider.notifier).updateRightMetric(config.type);
                           }
                         }
                         Navigator.pop(context);
@@ -128,13 +124,14 @@ class DashboardScreen extends ConsumerWidget {
     final obdState = ref.watch(obdServiceProvider);
     final telemetry = obdState.telemetry;
     
-    final leftMetricType = ref.watch(leftGaugeMetricProvider);
-    final rightMetricType = ref.watch(rightGaugeMetricProvider);
+    final settings = ref.watch(settingsProvider);
+    final leftMetricType = settings.leftMetric;
+    final rightMetricType = settings.rightMetric;
 
     final leftConfig = ObdMetricConfig.all.firstWhere((c) => c.type == leftMetricType);
     final rightConfig = ObdMetricConfig.all.firstWhere((c) => c.type == rightMetricType);
 
-    final isFullscreen = ref.watch(fullscreenProvider);
+    final isFullscreen = settings.isFullscreenCockpit;
 
     return Scaffold(
       appBar: isFullscreen
@@ -152,7 +149,7 @@ class DashboardScreen extends ConsumerWidget {
                   icon: const Icon(Icons.fullscreen_rounded),
                   tooltip: 'Fullscreen',
                   onPressed: () {
-                    ref.read(fullscreenProvider.notifier).state = true;
+                    ref.read(settingsProvider.notifier).setFullscreenCockpit(true);
                   },
                 ),
               ],
@@ -171,214 +168,107 @@ class DashboardScreen extends ConsumerWidget {
                         top: isFullscreen ? 36.0 : 12.0,
                         bottom: 8.0,
                       ),
-                      child: Column(
-                        children: [
-                          // 1. Main Gauges Row
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: GaugeWidget(
-                                      value: _getValueForMetric(leftMetricType, telemetry),
-                                      config: leftConfig,
-                                      onTap: () => _showMetricSelector(
-                                        context: context,
-                                        ref: ref,
-                                        isLeft: true,
-                                        currentSelection: leftMetricType,
-                                        telemetry: telemetry,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight,
+                              ),
+                              child: IntrinsicHeight(
+                                child: Column(
+                                  children: [
+                                    if (obdState.status == ObdStatus.connected ||
+                                        obdState.status == ObdStatus.initializing) ...[
+                                      _buildTripHeaderRow(context, ref, telemetry),
+                                      const SizedBox(height: 8),
+                                    ],
+                                    // 1. Main Gauges Row
+                                    Expanded(
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Expanded(
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              child: GaugeWidget(
+                                                value: _getValueForMetric(leftMetricType, telemetry),
+                                                config: leftConfig,
+                                                onTap: () => _showMetricSelector(
+                                                  context: context,
+                                                  ref: ref,
+                                                  isLeft: true,
+                                                  currentSelection: leftMetricType,
+                                                  telemetry: telemetry,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              child: GaugeWidget(
+                                                value: _getValueForMetric(rightMetricType, telemetry),
+                                                config: rightConfig,
+                                                onTap: () => _showMetricSelector(
+                                                  context: context,
+                                                  ref: ref,
+                                                  isLeft: false,
+                                                  currentSelection: rightMetricType,
+                                                  telemetry: telemetry,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: GaugeWidget(
-                                      value: _getValueForMetric(rightMetricType, telemetry),
-                                      config: rightConfig,
-                                      onTap: () => _showMetricSelector(
-                                        context: context,
-                                        ref: ref,
-                                        isLeft: false,
-                                        currentSelection: rightMetricType,
-                                        telemetry: telemetry,
+                                    const SizedBox(height: 12),
+                                    // 2. Small Stats Row (Secondary Indicators)
+                                    SizedBox(
+                                      height: 52,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          _buildSmallStatCard(
+                                            label: 'AKI VOLTS',
+                                            value: '${telemetry.voltage.toStringAsFixed(1)} V',
+                                            icon: Icons.battery_charging_full_rounded,
+                                            color: Colors.purpleAccent,
+                                          ),
+                                          _buildSmallStatCard(
+                                            label: 'SUHU MESIN',
+                                            value: '${telemetry.coolant.toStringAsFixed(0)} °C',
+                                            icon: Icons.thermostat_rounded,
+                                            color: Colors.orangeAccent,
+                                          ),
+                                          _buildSmallStatCard(
+                                            label: 'LEVEL BENSIN',
+                                            value: '${telemetry.fuelLevel.toStringAsFixed(0)} %',
+                                            icon: Icons.local_gas_station_rounded,
+                                            color: Colors.amber,
+                                          ),
+                                          _buildSmallStatCard(
+                                            label: 'KONSUMSI BBM',
+                                            value: telemetry.fuelEconomy == 0.0
+                                                ? '-- km/L'
+                                                : '${telemetry.fuelEconomy.toStringAsFixed(1)} km/L',
+                                            icon: Icons.analytics_rounded,
+                                            color: Colors.greenAccent,
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          // 2. Small Stats Row (Secondary Indicators)
-                          SizedBox(
-                            height: 52,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _buildSmallStatCard(
-                                  label: 'AKI VOLTS',
-                                  value: '${telemetry.voltage.toStringAsFixed(1)} V',
-                                  icon: Icons.battery_charging_full_rounded,
-                                  color: Colors.purpleAccent,
-                                ),
-                                _buildSmallStatCard(
-                                  label: 'SUHU MESIN',
-                                  value: '${telemetry.coolant.toStringAsFixed(0)} °C',
-                                  icon: Icons.thermostat_rounded,
-                                  color: Colors.orangeAccent,
-                                ),
-                                _buildSmallStatCard(
-                                  label: 'LEVEL BENSIN',
-                                  value: '${telemetry.fuelLevel.toStringAsFixed(0)} %',
-                                  icon: Icons.local_gas_station_rounded,
-                                  color: Colors.amber,
-                                ),
-                                _buildSmallStatCard(
-                                  label: 'KONSUMSI BBM',
-                                  value: telemetry.fuelEconomy == 0.0
-                                      ? '-- km/L'
-                                      : '${telemetry.fuelEconomy.toStringAsFixed(1)} km/L',
-                                  icon: Icons.analytics_rounded,
-                                  color: Colors.greenAccent,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-            if (obdState.status == ObdStatus.connected ||
-                obdState.status == ObdStatus.initializing)
-              Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Trip A (Left)
-                      GestureDetector(
-                        onLongPress: () => _showResetTripADialog(context, ref),
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Tekan lama untuk mereset Trip A'),
-                              duration: Duration(seconds: 2),
+                              ),
                             ),
                           );
                         },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.black45,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white12, width: 1),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.trip_origin_rounded, color: Colors.blueAccent, size: 12),
-                              const SizedBox(width: 4),
-                              Text(
-                                'TRIP A: ${ref.watch(tripRecorderProvider).tripADistance.toStringAsFixed(1)} km',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white70,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // ECO Mode (Center)
-                      AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
-                        opacity: telemetry.isEcoMode ? 1.0 : 0.15,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: telemetry.isEcoMode 
-                                ? const Color(0xFF33FF33).withOpacity(0.15) 
-                                : Colors.white10,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: telemetry.isEcoMode 
-                                  ? const Color(0xFF33FF33) 
-                                  : Colors.white24,
-                              width: 1.5,
-                            ),
-                            boxShadow: telemetry.isEcoMode ? [
-                              BoxShadow(
-                                color: const Color(0xFF33FF33).withOpacity(0.4),
-                                blurRadius: 8,
-                                spreadRadius: 1,
-                              )
-                            ] : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.eco_rounded,
-                            color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'ECO',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                              color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ),
-                      const SizedBox(width: 12),
-
-                      // Trip B (Right)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white12, width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.today_rounded, color: Colors.orangeAccent, size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              'TRIP B: ${ref.watch(tripRecorderProvider).tripBDistance.toStringAsFixed(1)} km',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white70,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             if (isFullscreen)
               Positioned(
                 top: 16,
@@ -388,7 +278,7 @@ class DashboardScreen extends ConsumerWidget {
                     color: Colors.black38,
                     child: InkWell(
                       onTap: () {
-                        ref.read(fullscreenProvider.notifier).state = false;
+                        ref.read(settingsProvider.notifier).setFullscreenCockpit(false);
                       },
                       child: const Padding(
                         padding: EdgeInsets.all(8.0),
@@ -405,6 +295,152 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTripHeaderRow(BuildContext context, WidgetRef ref, ObdTelemetry telemetry) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: GestureDetector(
+                      onLongPress: () => _showResetTripADialog(context, ref),
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tekan lama untuk mereset Trip A'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white12, width: 1),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.trip_origin_rounded, color: Colors.blueAccent, size: 12),
+                              const SizedBox(width: 6),
+                              Text(
+                                'TRIP A: ${ref.watch(tripRecorderProvider).tripADistance.toStringAsFixed(1)} km',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white70,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white12, width: 1),
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.today_rounded, color: Colors.orangeAccent, size: 12),
+                            const SizedBox(width: 6),
+                            Text(
+                              'TRIP B: ${ref.watch(tripRecorderProvider).tripBDistance.toStringAsFixed(1)} km',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white70,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        Align(
+          alignment: Alignment.center,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: telemetry.isEcoMode ? 1.0 : 0.15,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: telemetry.isEcoMode 
+                    ? const Color(0xFF33FF33).withOpacity(0.15) 
+                    : Colors.white10,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: telemetry.isEcoMode 
+                      ? const Color(0xFF33FF33) 
+                      : Colors.white24,
+                  width: 1.5,
+                ),
+                boxShadow: telemetry.isEcoMode ? [
+                  BoxShadow(
+                    color: const Color(0xFF33FF33).withOpacity(0.4),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  )
+                ] : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.eco_rounded,
+                    color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'ECO',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                      color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

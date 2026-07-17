@@ -2827,7 +2827,6 @@ class $UserPreferencesTable extends UserPreferences
     ),
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    $customConstraints: 'PRIMARY KEY',
   );
   static const VerificationMeta _valueMeta = const VerificationMeta('value');
   @override
