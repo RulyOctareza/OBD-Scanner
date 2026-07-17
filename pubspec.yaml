@@ -1,0 +1,58 @@
+name: autocare
+description: "AutoCare - Your silent car companion"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State Management & DI
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^14.2.0
+
+  # Local Database (Drift/SQLite)
+  drift: ^2.16.0
+  sqlite3_flutter_libs: ^0.5.20
+  path_provider: ^2.1.2
+  path: ^1.9.0
+
+  # Storage & Permissions
+  shared_preferences: ^2.2.2
+  permission_handler: ^11.3.1
+
+  # Localization & Charting
+  intl: ^0.19.0
+  fl_chart: ^0.68.0
+
+  # Bluetooth Classic (SPP)
+  flutter_bluetooth_serial: ^0.4.0
+  flutter_background_service: ^5.1.0
+  flutter_local_notifications: ^20.1.0
+  geolocator: ^14.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+  # Code Generation
+  drift_dev: ^2.16.0
+  riverpod_generator: ^2.3.9
+  build_runner: ^2.4.8
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  image_path: "assets/icon/app_icon.png"
