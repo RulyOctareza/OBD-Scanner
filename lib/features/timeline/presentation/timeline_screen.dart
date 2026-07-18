@@ -12,22 +12,37 @@ import '../../settings/presentation/settings_provider.dart';
 enum TimelineEventType { trip, fuel, maintenance }
 
 class TimelineEvent {
+  final int id;
   final DateTime timestamp;
   final TimelineEventType type;
   final String title;
   final String description;
   final String value;
   final String? subValue;
+  // Raw values for dashboard metrics
+  final double? rawDistance;
+  final double? rawCost;
+  final double? rawFuelEconomy;
 
   TimelineEvent({
+    required this.id,
     required this.timestamp,
     required this.type,
     required this.title,
     required this.description,
     required this.value,
     this.subValue,
+    this.rawDistance,
+    this.rawCost,
+    this.rawFuelEconomy,
   });
 }
+
+enum DateFilter { all, today, thisWeek, thisMonth, thisYear }
+enum TypeFilter { all, trip, fuel, maintenance }
+
+final selectedDateFilterProvider = StateProvider<DateFilter>((ref) => DateFilter.all);
+final selectedTypeFilterProvider = StateProvider<TypeFilter>((ref) => TypeFilter.all);
 
 final fuelLogsProvider = StreamProvider<List<FuelLog>>((ref) {
   final db = ref.watch(databaseProvider);
@@ -65,34 +80,41 @@ final timelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
 
   for (final trip in trips) {
     events.add(TimelineEvent(
+      id: trip.id,
       timestamp: trip.startTime,
       type: TimelineEventType.trip,
       title: "Perjalanan Selesai",
       description: "${trip.durationMinutes} menit • ${trip.avgSpeed.toStringAsFixed(0)} km/h • Max Coolant ${trip.maxCoolant}°C",
       value: "${trip.distance.toStringAsFixed(1)} km",
       subValue: "${trip.fuelEconomy.toStringAsFixed(1)} km/L",
+      rawDistance: trip.distance,
+      rawFuelEconomy: trip.fuelEconomy,
     ));
   }
 
   for (final fuel in fuels) {
     events.add(TimelineEvent(
+      id: fuel.id,
       timestamp: fuel.timestamp,
       type: TimelineEventType.fuel,
       title: "Isi BBM (${fuel.fuelType})",
       description: "Harga: ${currencyFormat.format(fuel.price)} • Odo: ${fuel.odometer.toStringAsFixed(0)} km",
       value: "${fuel.liters.toStringAsFixed(1)} Liter",
       subValue: fuel.economy != null ? "${fuel.economy!.toStringAsFixed(1)} km/L" : null,
+      rawCost: fuel.price,
     ));
   }
 
   for (final maint in maints) {
     events.add(TimelineEvent(
+      id: maint.id,
       timestamp: maint.timestamp,
       type: TimelineEventType.maintenance,
       title: maint.type,
       description: maint.description ?? "Perawatan berkala kendaraan",
       value: currencyFormat.format(maint.cost),
       subValue: "Odo: ${maint.odometer.toStringAsFixed(0)} km",
+      rawCost: maint.cost,
     ));
   }
 
@@ -100,12 +122,72 @@ final timelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
   return AsyncValue.data(events);
 });
 
+final filteredTimelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
+  final eventsAsync = ref.watch(timelineEventsProvider);
+  final dateFilter = ref.watch(selectedDateFilterProvider);
+  final typeFilter = ref.watch(selectedTypeFilterProvider);
+
+  return eventsAsync.whenData((events) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return events.where((event) {
+      // Type Filter
+      if (typeFilter != TypeFilter.all) {
+        if (typeFilter == TypeFilter.trip && event.type != TimelineEventType.trip) return false;
+        if (typeFilter == TypeFilter.fuel && event.type != TimelineEventType.fuel) return false;
+        if (typeFilter == TypeFilter.maintenance && event.type != TimelineEventType.maintenance) return false;
+      }
+
+      // Date Filter
+      final eventDate = DateTime(event.timestamp.year, event.timestamp.month, event.timestamp.day);
+      switch (dateFilter) {
+        case DateFilter.all:
+          return true;
+        case DateFilter.today:
+          return eventDate.isAtSameMomentAs(today);
+        case DateFilter.thisWeek:
+          final startOfWeek = today.subtract(Duration(days: now.weekday - 1));
+          return eventDate.isAfter(startOfWeek.subtract(const Duration(seconds: 1)));
+        case DateFilter.thisMonth:
+          return event.timestamp.year == now.year && event.timestamp.month == now.month;
+        case DateFilter.thisYear:
+          return event.timestamp.year == now.year;
+      }
+    }).toList();
+  });
+});
+
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final eventsAsync = ref.watch(timelineEventsProvider);
+    final eventsAsync = ref.watch(filteredTimelineEventsProvider);
+    final dateFilter = ref.watch(selectedDateFilterProvider);
+    final typeFilter = ref.watch(selectedTypeFilterProvider);
+
+    // Calculate stats re-filtered
+    double totalDistance = 0;
+    double totalCost = 0;
+    double totalFuelEconomySum = 0;
+    int tripCountWithEconomy = 0;
+
+    eventsAsync.whenData((events) {
+      for (final event in events) {
+        if (event.type == TimelineEventType.trip) {
+          totalDistance += event.rawDistance ?? 0.0;
+          if (event.rawFuelEconomy != null && event.rawFuelEconomy! > 0) {
+            totalFuelEconomySum += event.rawFuelEconomy!;
+            tripCountWithEconomy++;
+          }
+        } else {
+          totalCost += event.rawCost ?? 0.0;
+        }
+      }
+    });
+
+    final avgFuelEconomy = tripCountWithEconomy > 0 ? totalFuelEconomySum / tripCountWithEconomy : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -116,10 +198,26 @@ class TimelineScreen extends ConsumerWidget {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.danger),
+            tooltip: 'Hapus Semua Riwayat',
+            onPressed: () => _clearAllHistory(context, ref),
+          ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
+            // Ringkasan Dashboard Dinamis
+            _buildStatsDashboard(context, totalDistance, totalCost, avgFuelEconomy),
+
+            // Panel Filter (Waktu & Kategori)
+            _buildDateFilterRow(context, ref, dateFilter),
+            _buildTypeFilterRow(context, ref, typeFilter),
+            
+            const SizedBox(height: 8),
+
             // Action Buttons Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -167,7 +265,49 @@ class TimelineScreen extends ConsumerWidget {
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final event = events[index];
-                      return _buildTimelineItem(context, event, index == events.length - 1);
+                      return Dismissible(
+                        key: Key('${event.type.name}_${event.id}'),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          margin: const EdgeInsets.only(bottom: 16.0),
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20.0),
+                          decoration: BoxDecoration(
+                            color: AppColors.danger.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Hapus',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.delete_rounded, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await _showDeleteConfirmDialog(
+                            context,
+                            'Hapus Aktivitas?',
+                            'Apakah Anda yakin ingin menghapus aktivitas "${event.title}" ini?'
+                          );
+                        },
+                        onDismissed: (direction) async {
+                          await _deleteEvent(context, ref, event);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('"${event.title}" berhasil dihapus'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        },
+                        child: _buildTimelineItem(context, event, index == events.length - 1),
+                      );
                     },
                   );
                 },
@@ -177,6 +317,166 @@ class TimelineScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatsDashboard(BuildContext context, double distance, double cost, double economy) {
+    final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withOpacity(0.12),
+            AppColors.success.withOpacity(0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatColumn('Jarak Tempuh', '${distance.toStringAsFixed(1)} km', Icons.directions_car_rounded, AppColors.primary),
+          _buildStatDivider(),
+          _buildStatColumn('Pengeluaran', currencyFormat.format(cost), Icons.payments_rounded, AppColors.success),
+          _buildStatDivider(),
+          _buildStatColumn('Konsumsi BBM', '${economy.toStringAsFixed(1)} km/L', Icons.local_gas_station_rounded, AppColors.warning),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatDivider() {
+    return Container(
+      width: 1,
+      height: 36,
+      color: Colors.white.withOpacity(0.1),
+    );
+  }
+
+  Widget _buildStatColumn(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color.withOpacity(0.8), size: 20),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: AppTheme.numberStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateFilterRow(BuildContext context, WidgetRef ref, DateFilter activeFilter) {
+    final filters = {
+      DateFilter.all: 'Semua',
+      DateFilter.today: 'Hari Ini',
+      DateFilter.thisWeek: 'Minggu Ini',
+      DateFilter.thisMonth: 'Bulan Ini',
+      DateFilter.thisYear: 'Tahun Ini',
+    };
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: filters.entries.map((entry) {
+          final isSelected = entry.key == activeFilter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(
+                entry.value,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  ref.read(selectedDateFilterProvider.notifier).state = entry.key;
+                }
+              },
+              selectedColor: AppColors.primary.withOpacity(0.8),
+              backgroundColor: AppColors.card,
+              checkmarkColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.05),
+                  width: 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTypeFilterRow(BuildContext context, WidgetRef ref, TypeFilter activeFilter) {
+    final filters = {
+      TypeFilter.all: 'Semua Kategori',
+      TypeFilter.trip: 'Perjalanan',
+      TypeFilter.fuel: 'Bahan Bakar',
+      TypeFilter.maintenance: 'Servis',
+    };
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: filters.entries.map((entry) {
+          final isSelected = entry.key == activeFilter;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(
+                entry.value,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                if (selected) {
+                  ref.read(selectedTypeFilterProvider.notifier).state = entry.key;
+                }
+              },
+              selectedColor: AppColors.primary.withOpacity(0.8),
+              backgroundColor: AppColors.card,
+              checkmarkColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.05),
+                  width: 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -232,11 +532,15 @@ class TimelineScreen extends ConsumerWidget {
             children: [
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                width: 32,
-                height: 32,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: iconBg,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: iconColor.withOpacity(0.2),
+                    width: 2,
+                  ),
                 ),
                 child: Icon(icon, color: iconColor, size: 16),
               ),
@@ -257,6 +561,13 @@ class TimelineScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: Card(
                 margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                    color: Colors.white.withOpacity(0.04),
+                    width: 1,
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Row(
@@ -309,6 +620,66 @@ class TimelineScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<bool> _showDeleteConfirmDialog(BuildContext context, String title, String content) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    ) ?? false;
+  }
+
+  Future<void> _deleteEvent(BuildContext context, WidgetRef ref, TimelineEvent event) async {
+    final db = ref.read(databaseProvider);
+    switch (event.type) {
+      case TimelineEventType.trip:
+        await (db.delete(db.trips)..where((t) => t.id.equals(event.id))).go();
+        break;
+      case TimelineEventType.fuel:
+        await (db.delete(db.fuelLogs)..where((f) => f.id.equals(event.id))).go();
+        break;
+      case TimelineEventType.maintenance:
+        await (db.delete(db.maintenanceLogs)..where((m) => m.id.equals(event.id))).go();
+        break;
+    }
+  }
+
+  Future<void> _clearAllHistory(BuildContext context, WidgetRef ref) async {
+    final confirmed = await _showDeleteConfirmDialog(
+      context,
+      'Hapus Semua Riwayat?',
+      'Tindakan ini akan menghapus semua data perjalanan, pengisian BBM, dan servis secara permanen. Tindakan ini tidak dapat dibatalkan.'
+    );
+    if (confirmed) {
+      final db = ref.read(databaseProvider);
+      await db.delete(db.trips).go();
+      await db.delete(db.fuelLogs).go();
+      await db.delete(db.maintenanceLogs).go();
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Semua riwayat berhasil dihapus'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    }
   }
 
   void _showAddFuelDialog(BuildContext context, WidgetRef ref) {

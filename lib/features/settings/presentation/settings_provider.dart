@@ -14,6 +14,10 @@ class SettingsState {
   final bool isIgnitionOn;
   final ObdMetricType leftMetric;
   final ObdMetricType rightMetric;
+  final ObdMetricType smallMetric1;
+  final ObdMetricType smallMetric2;
+  final ObdMetricType smallMetric3;
+  final ObdMetricType smallMetric4;
   final bool isFullscreenCockpit;
   final bool autoConnectOBD;
   final String lastOBDAddress;
@@ -26,6 +30,10 @@ class SettingsState {
     required this.isIgnitionOn,
     required this.leftMetric,
     required this.rightMetric,
+    required this.smallMetric1,
+    required this.smallMetric2,
+    required this.smallMetric3,
+    required this.smallMetric4,
     required this.isFullscreenCockpit,
     required this.autoConnectOBD,
     required this.lastOBDAddress,
@@ -39,6 +47,10 @@ class SettingsState {
     bool? isIgnitionOn,
     ObdMetricType? leftMetric,
     ObdMetricType? rightMetric,
+    ObdMetricType? smallMetric1,
+    ObdMetricType? smallMetric2,
+    ObdMetricType? smallMetric3,
+    ObdMetricType? smallMetric4,
     bool? isFullscreenCockpit,
     bool? autoConnectOBD,
     String? lastOBDAddress,
@@ -51,6 +63,10 @@ class SettingsState {
       isIgnitionOn: isIgnitionOn ?? this.isIgnitionOn,
       leftMetric: leftMetric ?? this.leftMetric,
       rightMetric: rightMetric ?? this.rightMetric,
+      smallMetric1: smallMetric1 ?? this.smallMetric1,
+      smallMetric2: smallMetric2 ?? this.smallMetric2,
+      smallMetric3: smallMetric3 ?? this.smallMetric3,
+      smallMetric4: smallMetric4 ?? this.smallMetric4,
       isFullscreenCockpit: isFullscreenCockpit ?? this.isFullscreenCockpit,
       autoConnectOBD: autoConnectOBD ?? this.autoConnectOBD,
       lastOBDAddress: lastOBDAddress ?? this.lastOBDAddress,
@@ -70,6 +86,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     isIgnitionOn: true,
     leftMetric: ObdMetricType.rpm,
     rightMetric: ObdMetricType.speed,
+    smallMetric1: ObdMetricType.voltage,
+    smallMetric2: ObdMetricType.coolant,
+    smallMetric3: ObdMetricType.fuel,
+    smallMetric4: ObdMetricType.fuelEconomy,
     isFullscreenCockpit: false,
     autoConnectOBD: true,
     lastOBDAddress: "",
@@ -99,6 +119,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     // Dashboard preferences
     String? leftMetricStr = await db.getPreference('left_gauge_metric');
     String? rightMetricStr = await db.getPreference('right_gauge_metric');
+    String? sm1Str = await db.getPreference('small_metric_1');
+    String? sm2Str = await db.getPreference('small_metric_2');
+    String? sm3Str = await db.getPreference('small_metric_3');
+    String? sm4Str = await db.getPreference('small_metric_4');
     bool? isFullscreen = await db.getBoolPreference('cockpit_fullscreen');
     
     // Auto connect preferences
@@ -148,6 +172,46 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await db.setPreference('right_gauge_metric', 'speed');
     }
 
+    ObdMetricType sm1 = ObdMetricType.voltage;
+    if (sm1Str != null) {
+      sm1 = ObdMetricType.values.firstWhere(
+        (e) => e.toString().split('.').last == sm1Str,
+        orElse: () => ObdMetricType.voltage,
+      );
+    } else {
+      await db.setPreference('small_metric_1', 'voltage');
+    }
+
+    ObdMetricType sm2 = ObdMetricType.coolant;
+    if (sm2Str != null) {
+      sm2 = ObdMetricType.values.firstWhere(
+        (e) => e.toString().split('.').last == sm2Str,
+        orElse: () => ObdMetricType.coolant,
+      );
+    } else {
+      await db.setPreference('small_metric_2', 'coolant');
+    }
+
+    ObdMetricType sm3 = ObdMetricType.fuel;
+    if (sm3Str != null) {
+      sm3 = ObdMetricType.values.firstWhere(
+        (e) => e.toString().split('.').last == sm3Str,
+        orElse: () => ObdMetricType.fuel,
+      );
+    } else {
+      await db.setPreference('small_metric_3', 'fuel');
+    }
+
+    ObdMetricType sm4 = ObdMetricType.fuelEconomy;
+    if (sm4Str != null) {
+      sm4 = ObdMetricType.values.firstWhere(
+        (e) => e.toString().split('.').last == sm4Str,
+        orElse: () => ObdMetricType.fuelEconomy,
+      );
+    } else {
+      await db.setPreference('small_metric_4', 'fuelEconomy');
+    }
+
     if (isFullscreen == null) {
       isFullscreen = false;
       await db.setBoolPreference('cockpit_fullscreen', false);
@@ -187,6 +251,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       isIgnitionOn: ignition,
       leftMetric: leftMetric,
       rightMetric: rightMetric,
+      smallMetric1: sm1,
+      smallMetric2: sm2,
+      smallMetric3: sm3,
+      smallMetric4: sm4,
       isFullscreenCockpit: isFullscreen,
       autoConnectOBD: autoConnect,
       lastOBDAddress: lastAddr,
@@ -240,18 +308,51 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await _ref.read(databaseProvider).setBoolPreference('is_ignition_on', val);
   }
 
+  Future<void> setMetricAt(int index, ObdMetricType newMetric) async {
+    final currentMetrics = [
+      state.leftMetric,
+      state.rightMetric,
+      state.smallMetric1,
+      state.smallMetric2,
+      state.smallMetric3,
+      state.smallMetric4,
+    ];
+
+    if (currentMetrics[index] == newMetric) return;
+
+    final duplicateIndex = currentMetrics.indexOf(newMetric);
+    if (duplicateIndex != -1) {
+      final temp = currentMetrics[index];
+      currentMetrics[index] = newMetric;
+      currentMetrics[duplicateIndex] = temp;
+    } else {
+      currentMetrics[index] = newMetric;
+    }
+
+    state = state.copyWith(
+      leftMetric: currentMetrics[0],
+      rightMetric: currentMetrics[1],
+      smallMetric1: currentMetrics[2],
+      smallMetric2: currentMetrics[3],
+      smallMetric3: currentMetrics[4],
+      smallMetric4: currentMetrics[5],
+    );
+
+    final db = _ref.read(databaseProvider);
+    await db.setPreference('left_gauge_metric', currentMetrics[0].toString().split('.').last);
+    await db.setPreference('right_gauge_metric', currentMetrics[1].toString().split('.').last);
+    await db.setPreference('small_metric_1', currentMetrics[2].toString().split('.').last);
+    await db.setPreference('small_metric_2', currentMetrics[3].toString().split('.').last);
+    await db.setPreference('small_metric_3', currentMetrics[4].toString().split('.').last);
+    await db.setPreference('small_metric_4', currentMetrics[5].toString().split('.').last);
+  }
+
   Future<void> updateLeftMetric(ObdMetricType metric) async {
-    if (state.leftMetric == metric) return;
-    state = state.copyWith(leftMetric: metric);
-    final metricStr = metric.toString().split('.').last;
-    await _ref.read(databaseProvider).setPreference('left_gauge_metric', metricStr);
+    await setMetricAt(0, metric);
   }
 
   Future<void> updateRightMetric(ObdMetricType metric) async {
-    if (state.rightMetric == metric) return;
-    state = state.copyWith(rightMetric: metric);
-    final metricStr = metric.toString().split('.').last;
-    await _ref.read(databaseProvider).setPreference('right_gauge_metric', metricStr);
+    await setMetricAt(1, metric);
   }
 
   Future<void> setFullscreenCockpit(bool val) async {

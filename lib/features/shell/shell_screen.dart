@@ -34,17 +34,10 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   void _handleOrientation(int index) {
     if (index == 1) { // Dashboard index
-      final isFullscreen = ref.read(settingsProvider).isFullscreenCockpit;
-      if (isFullscreen) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
-      } else {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]);
-      }
+      ref.read(settingsProvider.notifier).setFullscreenCockpit(false);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
     } else {
       // Turn off fullscreen when navigating away from dashboard
       ref.read(settingsProvider.notifier).setFullscreenCockpit(false);

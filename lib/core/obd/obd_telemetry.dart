@@ -11,7 +11,7 @@ class ObdTelemetry {
   final double? timingAdvance;
   final List<String> dtcs;
   final double? odometer;
-  final double fuelLevel;
+  final double? fuelLevel;
   final DateTime timestamp;
 
   ObdTelemetry({
@@ -45,7 +45,7 @@ class ObdTelemetry {
       timingAdvance: null,
       dtcs: const [],
       odometer: null,
-      fuelLevel: 100.0,
+      fuelLevel: null,
       timestamp: DateTime.now(),
     );
   }
@@ -95,13 +95,37 @@ class ObdTelemetry {
     return throttle < 22 && engineLoad < 38 && rpm < 2600;
   }
 
-  /// Dynamic calculation of fuel consumption in km/L
+  /// Dynamic calculation of fuel consumption in km/L using Speed-Density (MAP) or MAF
   double get fuelEconomy {
     if (rpm < 500) return 0.0; // Engine off or starting
-    // For a typical 1.0L engine (Agya):
-    // Idle consumption at 850 RPM is ~0.5 L/h.
-    // We estimate consumption based on engine RPM and load.
-    final estimatedFuelFlowLh = (rpm * (engineLoad / 100.0) * 0.003) + 0.5;
+
+    double estimatedFuelFlowLh;
+
+    if (maf != null && maf! > 0.0) {
+      // MAF method (if supported): Fuel Flow L/h = MAF * 3600 / (14.7 * 740)
+      estimatedFuelFlowLh = maf! * 0.3309;
+    } else if (mapValue > 0.0) {
+      // Speed-Density method (specifically tailored for MAP-based engines like Toyota Agya)
+      // If Intake Air Temp is null, default to 25°C (298.15 Kelvin)
+      final tempK = (intakeAirTemp ?? 25.0) + 273.15;
+      
+      // Agya has 1.0L or 1.2L engine. We assume 1.2L displacement and 80% volumetric efficiency.
+      const displacement = 1.2;
+      const volumetricEfficiency = 0.80;
+      
+      // Calculate air mass flow rate using ideal gas law (PV = nRT)
+      // MAF (g/s) = (MAP * displacement * RPM * VE * MolarMassOfAir) / (120 * R * tempK)
+      // Molar mass of air = 28.97 g/mol. R = 8.314.
+      final estimatedMaf = (mapValue * rpm / tempK) * (displacement * volumetricEfficiency * 28.97 / (120 * 8.314));
+      
+      // Fuel Flow (L/h) = MAF (g/s) * 3600 / (14.7 * 740)
+      estimatedFuelFlowLh = estimatedMaf * 0.3309;
+    } else {
+      // Fallback calculation using engine RPM and load
+      estimatedFuelFlowLh = (rpm * (engineLoad / 100.0) * 0.003) + 0.5;
+    }
+
+    if (estimatedFuelFlowLh < 0.1) estimatedFuelFlowLh = 0.1;
     if (speed < 2.0) return 0.0; // Show 0.0 when stationary
     final kml = speed / estimatedFuelFlowLh;
     return kml > 50.0 ? 50.0 : kml; // Cap at 50 km/L max

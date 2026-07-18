@@ -11,6 +11,10 @@ enum ObdMetricType {
   engineLoad,
   map,
   fuel,
+  fuelEconomy,
+  intakeAirTemp,
+  maf,
+  timingAdvance,
 }
 
 class ObdMetricConfig {
@@ -105,11 +109,20 @@ class ObdMetricConfig {
       warningThreshold: 15,
       color: const Color(0xFFFFB300), // Amber Yellow
     ),
+    ObdMetricConfig(
+      type: ObdMetricType.fuelEconomy,
+      label: 'FUEL ECONOMY',
+      unit: 'km/L',
+      minValue: 0,
+      maxValue: 30,
+      warningThreshold: 5,
+      color: const Color(0xFF00FF66), // Eco Green
+    ),
   ];
 }
 
 class GaugeWidget extends StatefulWidget {
-  final double value;
+  final double? value;
   final ObdMetricConfig config;
   final VoidCallback onTap;
 
@@ -131,30 +144,31 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _peakValue = widget.value;
+    _peakValue = widget.value ?? 0.0;
     
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
     );
-    _animation = Tween<double>(begin: widget.value, end: widget.value).animate(_controller);
+    _animation = Tween<double>(begin: widget.value ?? 0.0, end: widget.value ?? 0.0).animate(_controller);
   }
 
   @override
   void didUpdateWidget(covariant GaugeWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final currentValue = widget.value ?? 0.0;
     if (widget.config.type != oldWidget.config.type) {
-      _peakValue = widget.value;
+      _peakValue = currentValue;
       _controller.stop();
-      _animation = Tween<double>(begin: widget.value, end: widget.value).animate(_controller);
+      _animation = Tween<double>(begin: currentValue, end: currentValue).animate(_controller);
     } else {
-      if (widget.value > _peakValue) {
-        _peakValue = widget.value;
+      if (widget.value != null && currentValue > _peakValue) {
+        _peakValue = currentValue;
       }
       
       _animation = Tween<double>(
         begin: _animation.value,
-        end: widget.value,
+        end: currentValue,
       ).animate(
         CurvedAnimation(
           parent: _controller,
@@ -177,10 +191,12 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
       animation: _animation,
       builder: (context, child) {
         final displayValue = _animation.value;
-        final isWarning = (widget.config.type == ObdMetricType.fuel ||
-                widget.config.type == ObdMetricType.voltage)
-            ? displayValue <= widget.config.warningThreshold
-            : displayValue >= widget.config.warningThreshold;
+        final isWarning = widget.value == null
+            ? false
+            : (widget.config.type == ObdMetricType.fuel ||
+                    widget.config.type == ObdMetricType.voltage)
+                ? displayValue <= widget.config.warningThreshold
+                : displayValue >= widget.config.warningThreshold;
 
         return GestureDetector(
           onTap: widget.onTap,
@@ -220,7 +236,9 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
                         border: Border.all(color: widget.config.color.withOpacity(0.3), width: 0.5),
                       ),
                       child: Text(
-                        'PEAK: ${_peakValue.toStringAsFixed(0)}',
+                        widget.value == null
+                            ? 'PEAK: --'
+                            : 'PEAK: ${_peakValue.toStringAsFixed(0)}',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
@@ -279,7 +297,9 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
                         children: [
                           const SizedBox(height: 12),
                           Text(
-                            displayValue.toStringAsFixed(widget.config.type == ObdMetricType.voltage ? 1 : 0),
+                            widget.value == null
+                                ? '--'
+                                : displayValue.toStringAsFixed(widget.config.type == ObdMetricType.voltage ? 1 : 0),
                             style: TextStyle(
                               fontSize: 38,
                               fontWeight: FontWeight.w900,

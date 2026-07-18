@@ -10,7 +10,7 @@ import '../../settings/presentation/settings_provider.dart';
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
-  double _getValueForMetric(ObdMetricType type, ObdTelemetry telemetry) {
+  double? _getValueForMetric(ObdMetricType type, ObdTelemetry telemetry) {
     switch (type) {
       case ObdMetricType.rpm:
         return telemetry.rpm;
@@ -28,16 +28,30 @@ class DashboardScreen extends ConsumerWidget {
         return telemetry.mapValue;
       case ObdMetricType.fuel:
         return telemetry.fuelLevel;
+      case ObdMetricType.fuelEconomy:
+        return telemetry.fuelEconomy;
+      case ObdMetricType.intakeAirTemp:
+        return telemetry.intakeAirTemp;
+      case ObdMetricType.maf:
+        return telemetry.maf;
+      case ObdMetricType.timingAdvance:
+        return telemetry.timingAdvance;
     }
+  }
+
+  bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
+    return state.checkedSensors.contains(type) && !state.supportedSensors.contains(type);
   }
 
   void _showMetricSelector({
     required BuildContext context,
     required WidgetRef ref,
-    required bool isLeft,
+    required int spotIndex,
     required ObdMetricType currentSelection,
     required ObdTelemetry telemetry,
   }) {
+    final obdState = ref.read(obdServiceProvider);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.background,
@@ -64,9 +78,14 @@ class DashboardScreen extends ConsumerWidget {
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
-                  children: ObdMetricConfig.all.map((config) {
+                  children: ObdMetricConfig.all.where((config) {
+                    final isChecked = obdState.checkedSensors.contains(config.type);
+                    final isSupported = obdState.supportedSensors.contains(config.type);
+                    return !(isChecked && !isSupported);
+                  }).map((config) {
                     final isSelected = config.type == currentSelection;
                     final val = _getValueForMetric(config.type, telemetry);
+                    final isVoltageOrFuelEco = config.type == ObdMetricType.voltage || config.type == ObdMetricType.fuelEconomy;
                     return ListTile(
                       selected: isSelected,
                       selectedTileColor: config.color.withOpacity(0.1),
@@ -80,7 +99,11 @@ class DashboardScreen extends ConsumerWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       trailing: Text(
-                        '${val.toStringAsFixed(config.type == ObdMetricType.voltage ? 1 : 0)} ${config.unit}',
+                        val == null
+                            ? '-- ${config.unit}'
+                            : (config.type == ObdMetricType.fuelEconomy && val == 0.0)
+                                ? '-- ${config.unit}'
+                                : '${val.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}',
                         style: TextStyle(
                           color: config.color,
                           fontWeight: FontWeight.bold,
@@ -88,24 +111,7 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                       ),
                       onTap: () {
-                        final leftVal = ref.read(settingsProvider).leftMetric;
-                        final rightVal = ref.read(settingsProvider).rightMetric;
-
-                        if (isLeft) {
-                          if (config.type == rightVal) {
-                            ref.read(settingsProvider.notifier).updateLeftMetric(config.type);
-                            ref.read(settingsProvider.notifier).updateRightMetric(leftVal);
-                          } else {
-                            ref.read(settingsProvider.notifier).updateLeftMetric(config.type);
-                          }
-                        } else {
-                          if (config.type == leftVal) {
-                            ref.read(settingsProvider.notifier).updateRightMetric(config.type);
-                            ref.read(settingsProvider.notifier).updateLeftMetric(rightVal);
-                          } else {
-                            ref.read(settingsProvider.notifier).updateRightMetric(config.type);
-                          }
-                        }
+                        ref.read(settingsProvider.notifier).setMetricAt(spotIndex, config.type);
                         Navigator.pop(context);
                       },
                     );
@@ -189,7 +195,7 @@ class DashboardScreen extends ConsumerWidget {
                                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                         crossAxisAlignment: CrossAxisAlignment.center,
                                         children: [
-                                          Expanded(
+                                           Expanded(
                                             child: Padding(
                                               padding: const EdgeInsets.symmetric(horizontal: 16),
                                               child: GaugeWidget(
@@ -198,7 +204,7 @@ class DashboardScreen extends ConsumerWidget {
                                                 onTap: () => _showMetricSelector(
                                                   context: context,
                                                   ref: ref,
-                                                  isLeft: true,
+                                                  spotIndex: 0,
                                                   currentSelection: leftMetricType,
                                                   telemetry: telemetry,
                                                 ),
@@ -214,7 +220,7 @@ class DashboardScreen extends ConsumerWidget {
                                                 onTap: () => _showMetricSelector(
                                                   context: context,
                                                   ref: ref,
-                                                  isLeft: false,
+                                                  spotIndex: 1,
                                                   currentSelection: rightMetricType,
                                                   telemetry: telemetry,
                                                 ),
@@ -231,32 +237,38 @@ class DashboardScreen extends ConsumerWidget {
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                         children: [
-                                          _buildSmallStatCard(
-                                            label: 'AKI VOLTS',
-                                            value: '${telemetry.voltage.toStringAsFixed(1)} V',
-                                            icon: Icons.battery_charging_full_rounded,
-                                            color: Colors.purpleAccent,
-                                          ),
-                                          _buildSmallStatCard(
-                                            label: 'SUHU MESIN',
-                                            value: '${telemetry.coolant.toStringAsFixed(0)} °C',
-                                            icon: Icons.thermostat_rounded,
-                                            color: Colors.orangeAccent,
-                                          ),
-                                          _buildSmallStatCard(
-                                            label: 'LEVEL BENSIN',
-                                            value: '${telemetry.fuelLevel.toStringAsFixed(0)} %',
-                                            icon: Icons.local_gas_station_rounded,
-                                            color: Colors.amber,
-                                          ),
-                                          _buildSmallStatCard(
-                                            label: 'KONSUMSI BBM',
-                                            value: telemetry.fuelEconomy == 0.0
-                                                ? '-- km/L'
-                                                : '${telemetry.fuelEconomy.toStringAsFixed(1)} km/L',
-                                            icon: Icons.analytics_rounded,
-                                            color: Colors.greenAccent,
-                                          ),
+                                          if (!_isMetricUnsupported(settings.smallMetric1, obdState))
+                                            _buildInteractiveSmallStatCard(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 2,
+                                              metricType: settings.smallMetric1,
+                                              telemetry: telemetry,
+                                            ),
+                                          if (!_isMetricUnsupported(settings.smallMetric2, obdState))
+                                            _buildInteractiveSmallStatCard(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 3,
+                                              metricType: settings.smallMetric2,
+                                              telemetry: telemetry,
+                                            ),
+                                          if (!_isMetricUnsupported(settings.smallMetric3, obdState))
+                                            _buildInteractiveSmallStatCard(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 4,
+                                              metricType: settings.smallMetric3,
+                                              telemetry: telemetry,
+                                            ),
+                                          if (!_isMetricUnsupported(settings.smallMetric4, obdState))
+                                            _buildInteractiveSmallStatCard(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 5,
+                                              metricType: settings.smallMetric4,
+                                              telemetry: telemetry,
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -444,58 +456,120 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildInteractiveSmallStatCard({
+    required BuildContext context,
+    required WidgetRef ref,
+    required int spotIndex,
+    required ObdMetricType metricType,
+    required ObdTelemetry telemetry,
+  }) {
+    final config = ObdMetricConfig.all.firstWhere((c) => c.type == metricType);
+    final value = _getValueForMetric(metricType, telemetry);
+    final isVoltageOrFuelEco = metricType == ObdMetricType.voltage || metricType == ObdMetricType.fuelEconomy;
+    final valueText = value == null
+        ? '-- ${config.unit}'
+        : (metricType == ObdMetricType.fuelEconomy && value == 0.0)
+            ? '-- ${config.unit}'
+            : '${value.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}';
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _showMetricSelector(
+          context: context,
+          ref: ref,
+          spotIndex: spotIndex,
+          currentSelection: metricType,
+          telemetry: telemetry,
+        ),
+        child: _buildSmallStatCard(
+          label: config.label,
+          value: valueText,
+          icon: _getMetricIcon(metricType),
+          color: config.color,
+        ),
+      ),
+    );
+  }
+
+  IconData _getMetricIcon(ObdMetricType type) {
+    switch (type) {
+      case ObdMetricType.rpm:
+        return Icons.speed_rounded;
+      case ObdMetricType.speed:
+        return Icons.navigation_rounded;
+      case ObdMetricType.coolant:
+        return Icons.thermostat_rounded;
+      case ObdMetricType.voltage:
+        return Icons.battery_charging_full_rounded;
+      case ObdMetricType.throttle:
+        return Icons.input_rounded;
+      case ObdMetricType.engineLoad:
+        return Icons.work_rounded;
+      case ObdMetricType.map:
+        return Icons.compress_rounded;
+      case ObdMetricType.fuel:
+        return Icons.local_gas_station_rounded;
+      case ObdMetricType.fuelEconomy:
+        return Icons.analytics_rounded;
+      case ObdMetricType.intakeAirTemp:
+        return Icons.ac_unit_rounded;
+      case ObdMetricType.maf:
+        return Icons.air_rounded;
+      case ObdMetricType.timingAdvance:
+        return Icons.flash_on_rounded;
+    }
+  }
+
   Widget _buildSmallStatCard({
     required String label,
     required String value,
     required IconData icon,
     required Color color,
   }) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-        decoration: BoxDecoration(
-          color: AppColors.surface.withOpacity(0.6),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white10, width: 1),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 7.5,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.8,
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white10, width: 1),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.8,
+                    color: AppColors.textSecondary,
                   ),
-                  const SizedBox(height: 1),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textPrimary,
-                      fontFamily: 'monospace',
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                    fontFamily: 'monospace',
                   ),
-                ],
-              ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

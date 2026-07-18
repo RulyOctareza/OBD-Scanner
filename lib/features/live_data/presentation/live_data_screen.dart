@@ -3,9 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import 'widgets/gauge_widget.dart';
 
 class LiveDataScreen extends ConsumerWidget {
   const LiveDataScreen({super.key});
+
+  bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
+    return state.checkedSensors.contains(type) && !state.supportedSensors.contains(type);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,100 +39,110 @@ class LiveDataScreen extends ConsumerWidget {
                 mainAxisSpacing: AppSpacing.lg,
                 childAspectRatio: 1.15,
                 children: [
-                  _buildMetricCard(
-                    'RPM',
-                    telemetry.rpm.toStringAsFixed(0),
-                    'rpm',
-                    icon: Icons.speed_rounded,
-                    color: telemetry.rpm > 3500
-                        ? AppColors.warning
-                        : AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Kecepatan',
-                    telemetry.speed.toStringAsFixed(0),
-                    'km/h',
-                    icon: Icons.navigation_rounded,
-                    color: telemetry.speed > 100
-                        ? AppColors.warning
-                        : AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Suhu Pendingin',
-                    '${telemetry.coolant.toStringAsFixed(0)}°',
-                    'Celsius',
-                    icon: Icons.thermostat_rounded,
-                    color: telemetry.coolant > 100
-                        ? AppColors.danger
-                        : (telemetry.coolant > 95
-                              ? AppColors.warning
-                              : AppColors.success),
-                  ),
-                  _buildMetricCard(
-                    'Tegangan Aki',
-                    '${telemetry.voltage.toStringAsFixed(1)}V',
-                    'Volt',
-                    icon: Icons.battery_charging_full_rounded,
-                    color: telemetry.voltage < 11.8
-                        ? AppColors.danger
-                        : AppColors.success,
-                  ),
-                  _buildMetricCard(
-                    'Bukaan Gas',
-                    '${telemetry.throttle.toStringAsFixed(0)}%',
-                    'Throttle',
-                    icon: Icons.airline_seat_recline_extra_rounded,
-                    color: AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Beban Mesin',
-                    '${telemetry.engineLoad.toStringAsFixed(0)}%',
-                    'Engine Load',
-                    icon: Icons.work_rounded,
-                    color: telemetry.engineLoad > 85
-                        ? AppColors.warning
-                        : AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Intake (MAP)',
-                    '${telemetry.mapValue.toStringAsFixed(0)}',
-                    'kPa',
-                    icon: Icons.compress_rounded,
-                    color: AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Suhu Intake',
-                    telemetry.intakeAirTemp != null
-                        ? '${telemetry.intakeAirTemp!.toStringAsFixed(0)}°'
-                        : '--',
-                    '°C',
-                    icon: Icons.ac_unit_rounded,
-                    color: telemetry.intakeAirTemp != null
-                        ? (telemetry.intakeAirTemp! > 70
-                              ? AppColors.danger
-                              : telemetry.intakeAirTemp! > 50
-                                  ? AppColors.warning
-                                  : AppColors.success)
-                        : AppColors.textSecondary,
-                  ),
-                  _buildMetricCard(
-                    'MAF',
-                    telemetry.maf != null
-                        ? telemetry.maf!.toStringAsFixed(1)
-                        : '--',
-                    'g/s',
-                    icon: Icons.air_rounded,
-                    color: AppColors.primary,
-                  ),
-                  _buildMetricCard(
-                    'Timing Advance',
-                    telemetry.timingAdvance != null
-                        ? telemetry.timingAdvance!.toStringAsFixed(1)
-                        : '--',
-                    '°',
-                    icon: Icons.flash_on_rounded,
-                    color: AppColors.primary,
-                  ),
+                  if (!_isMetricUnsupported(ObdMetricType.rpm, obdState))
+                    _buildMetricCard(
+                      'RPM',
+                      telemetry.rpm.toStringAsFixed(0),
+                      'rpm',
+                      icon: Icons.speed_rounded,
+                      color: telemetry.rpm > 3500
+                          ? AppColors.warning
+                          : AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.speed, obdState))
+                    _buildMetricCard(
+                      'Kecepatan',
+                      telemetry.speed.toStringAsFixed(0),
+                      'km/h',
+                      icon: Icons.navigation_rounded,
+                      color: telemetry.speed > 100
+                          ? AppColors.warning
+                          : AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.coolant, obdState))
+                    _buildMetricCard(
+                      'Suhu Pendingin',
+                      '${telemetry.coolant.toStringAsFixed(0)}°',
+                      'Celsius',
+                      icon: Icons.thermostat_rounded,
+                      color: telemetry.coolant > 100
+                          ? AppColors.danger
+                          : (telemetry.coolant > 95
+                                ? AppColors.warning
+                                : AppColors.success),
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.voltage, obdState))
+                    _buildMetricCard(
+                      'Tegangan Aki',
+                      '${telemetry.voltage.toStringAsFixed(1)}V',
+                      'Volt',
+                      icon: Icons.battery_charging_full_rounded,
+                      color: telemetry.voltage < 11.8
+                          ? AppColors.danger
+                          : AppColors.success,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.throttle, obdState))
+                    _buildMetricCard(
+                      'Bukaan Gas',
+                      '${telemetry.throttle.toStringAsFixed(0)}%',
+                      'Throttle',
+                      icon: Icons.airline_seat_recline_extra_rounded,
+                      color: AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.engineLoad, obdState))
+                    _buildMetricCard(
+                      'Beban Mesin',
+                      '${telemetry.engineLoad.toStringAsFixed(0)}%',
+                      'Engine Load',
+                      icon: Icons.work_rounded,
+                      color: telemetry.engineLoad > 85
+                          ? AppColors.warning
+                          : AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.map, obdState))
+                    _buildMetricCard(
+                      'Intake (MAP)',
+                      '${telemetry.mapValue.toStringAsFixed(0)}',
+                      'kPa',
+                      icon: Icons.compress_rounded,
+                      color: AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.intakeAirTemp, obdState))
+                    _buildMetricCard(
+                      'Suhu Intake',
+                      telemetry.intakeAirTemp != null
+                          ? '${telemetry.intakeAirTemp!.toStringAsFixed(0)}°'
+                          : '--',
+                      '°C',
+                      icon: Icons.ac_unit_rounded,
+                      color: telemetry.intakeAirTemp != null
+                          ? (telemetry.intakeAirTemp! > 70
+                                ? AppColors.danger
+                                : telemetry.intakeAirTemp! > 50
+                                    ? AppColors.warning
+                                    : AppColors.success)
+                          : AppColors.textSecondary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.maf, obdState))
+                    _buildMetricCard(
+                      'MAF',
+                      telemetry.maf != null
+                          ? telemetry.maf!.toStringAsFixed(1)
+                          : '--',
+                      'g/s',
+                      icon: Icons.air_rounded,
+                      color: AppColors.primary,
+                    ),
+                  if (!_isMetricUnsupported(ObdMetricType.timingAdvance, obdState))
+                    _buildMetricCard(
+                      'Timing Advance',
+                      telemetry.timingAdvance != null
+                          ? telemetry.timingAdvance!.toStringAsFixed(1)
+                          : '--',
+                      '°',
+                      icon: Icons.flash_on_rounded,
+                      color: AppColors.primary,
+                    ),
                 ],
               ),
       ),

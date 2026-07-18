@@ -5,14 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../obd/obd_parser.dart';
 import '../obd/obd_simulator.dart';
 import '../obd/obd_telemetry.dart';
-import '../database/database.dart';
 import '../database/database_provider.dart';
 import '../../features/settings/presentation/settings_provider.dart';
+import '../../features/live_data/presentation/widgets/gauge_widget.dart';
 
 enum ObdStatus {
   disconnected,
@@ -29,6 +28,8 @@ class ObdState {
   final bool isSimulatorMode;
   final String? connectedDeviceName;
   final String? connectedDeviceAddress;
+  final Set<ObdMetricType> supportedSensors;
+  final Set<ObdMetricType> checkedSensors;
 
   ObdState({
     required this.status,
@@ -37,6 +38,8 @@ class ObdState {
     required this.isSimulatorMode,
     this.connectedDeviceName,
     this.connectedDeviceAddress,
+    required this.supportedSensors,
+    required this.checkedSensors,
   });
 
   factory ObdState.initial() {
@@ -44,6 +47,8 @@ class ObdState {
       status: ObdStatus.disconnected,
       telemetry: ObdTelemetry.empty(),
       isSimulatorMode: false,
+      supportedSensors: const {},
+      checkedSensors: const {},
     );
   }
 
@@ -54,6 +59,8 @@ class ObdState {
     bool? isSimulatorMode,
     String? connectedDeviceName,
     String? connectedDeviceAddress,
+    Set<ObdMetricType>? supportedSensors,
+    Set<ObdMetricType>? checkedSensors,
   }) {
     return ObdState(
       status: status ?? this.status,
@@ -62,6 +69,8 @@ class ObdState {
       isSimulatorMode: isSimulatorMode ?? this.isSimulatorMode,
       connectedDeviceName: connectedDeviceName ?? this.connectedDeviceName,
       connectedDeviceAddress: connectedDeviceAddress ?? this.connectedDeviceAddress,
+      supportedSensors: supportedSensors ?? this.supportedSensors,
+      checkedSensors: checkedSensors ?? this.checkedSensors,
     );
   }
 }
@@ -88,7 +97,13 @@ class ObdService extends StateNotifier<ObdState> {
       if (state.isSimulatorMode) {
         _startSimulation();
       } else {
-        _autoConnect();
+        // Wait 3 seconds on app startup to give the OS Bluetooth stack and 
+        // ELM327 dongle time to fully release the previous RFCOMM connection.
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            _autoConnect();
+          }
+        });
       }
       _startAutoReconnectTimer();
     });
@@ -192,6 +207,8 @@ class ObdService extends StateNotifier<ObdState> {
       errorMessage: null,
       connectedDeviceName: device.name,
       connectedDeviceAddress: device.address,
+      supportedSensors: const {},
+      checkedSensors: const {},
     );
 
     const int maxRetries = 3;
@@ -295,7 +312,11 @@ class ObdService extends StateNotifier<ObdState> {
       // Keep simulation going
     } else {
       _disconnectReal();
-      state = state.copyWith(status: ObdStatus.disconnected);
+      state = state.copyWith(
+        status: ObdStatus.disconnected,
+        supportedSensors: const {},
+        checkedSensors: const {},
+      );
     }
   }
 
@@ -320,6 +341,8 @@ class ObdService extends StateNotifier<ObdState> {
       state = state.copyWith(
         status: ObdStatus.connected,
         telemetry: telemetry,
+        supportedSensors: ObdMetricType.values.toSet(),
+        checkedSensors: ObdMetricType.values.toSet(),
       );
     });
   }
@@ -385,48 +408,116 @@ class ObdService extends StateNotifier<ObdState> {
 
   void _parseResponse(String command, String response) {
     ObdTelemetry current = state.telemetry;
+    ObdMetricType? metricType;
+    bool isValid = false;
+
     if (command == 'AT RV') {
+      metricType = ObdMetricType.voltage;
       final val = ObdParser.parseVoltage(response);
-      if (val != null) current = current.copyWith(voltage: val);
+      if (val != null) {
+        current = current.copyWith(voltage: val);
+        isValid = true;
+      }
     } else if (command == '010C') {
+      metricType = ObdMetricType.rpm;
       final val = ObdParser.parseRpm(response);
-      if (val != null) current = current.copyWith(rpm: val);
+      if (val != null) {
+        current = current.copyWith(rpm: val);
+        isValid = true;
+      }
     } else if (command == '010D') {
+      metricType = ObdMetricType.speed;
       final val = ObdParser.parseSpeed(response);
-      if (val != null) current = current.copyWith(speed: val);
+      if (val != null) {
+        current = current.copyWith(speed: val);
+        isValid = true;
+      }
     } else if (command == '0105') {
+      metricType = ObdMetricType.coolant;
       final val = ObdParser.parseCoolant(response);
-      if (val != null) current = current.copyWith(coolant: val);
+      if (val != null) {
+        current = current.copyWith(coolant: val);
+        isValid = true;
+      }
     } else if (command == '010F') {
+      metricType = ObdMetricType.intakeAirTemp;
       final val = ObdParser.parseIntakeAirTemp(response);
-      if (val != null) current = current.copyWith(intakeAirTemp: val);
+      if (val != null) {
+        current = current.copyWith(intakeAirTemp: val);
+        isValid = true;
+      }
     } else if (command == '010B') {
+      metricType = ObdMetricType.map;
       final val = ObdParser.parseMap(response);
-      if (val != null) current = current.copyWith(mapValue: val);
+      if (val != null) {
+        current = current.copyWith(mapValue: val);
+        isValid = true;
+      }
     } else if (command == '0110') {
+      metricType = ObdMetricType.maf;
       final val = ObdParser.parseMaf(response);
-      if (val != null) current = current.copyWith(maf: val);
+      if (val != null) {
+        current = current.copyWith(maf: val);
+        isValid = true;
+      }
     } else if (command == '010E') {
+      metricType = ObdMetricType.timingAdvance;
       final val = ObdParser.parseTimingAdvance(response);
-      if (val != null) current = current.copyWith(timingAdvance: val);
+      if (val != null) {
+        current = current.copyWith(timingAdvance: val);
+        isValid = true;
+      }
     } else if (command == '0111') {
+      metricType = ObdMetricType.throttle;
       final val = ObdParser.parseThrottle(response);
-      if (val != null) current = current.copyWith(throttle: val);
+      if (val != null) {
+        current = current.copyWith(throttle: val);
+        isValid = true;
+      }
     } else if (command == '0104') {
+      metricType = ObdMetricType.engineLoad;
       final val = ObdParser.parseEngineLoad(response);
-      if (val != null) current = current.copyWith(engineLoad: val);
+      if (val != null) {
+        current = current.copyWith(engineLoad: val);
+        isValid = true;
+      }
     } else if (command == '01A6') {
       final val = ObdParser.parseOdometer(response);
       if (val != null) current = current.copyWith(odometer: val);
     } else if (command == '012F') {
+      metricType = ObdMetricType.fuel;
       final val = ObdParser.parseFuelLevel(response);
-      if (val != null) current = current.copyWith(fuelLevel: val);
+      if (val != null) {
+        current = current.copyWith(fuelLevel: val);
+        isValid = true;
+      }
     } else if (command == '03') {
       final val = ObdParser.parseDtc(response);
       current = current.copyWith(dtcs: val);
     }
+
+    final checked = Set<ObdMetricType>.from(state.checkedSensors);
+    final supported = Set<ObdMetricType>.from(state.supportedSensors);
+
+    if (metricType != null) {
+      checked.add(metricType);
+      if (isValid) {
+        supported.add(metricType);
+      }
+    }
+
+    // Handle calculated fuelEconomy support. It is supported if MAP or MAF is supported.
+    if (checked.contains(ObdMetricType.map) || checked.contains(ObdMetricType.rpm)) {
+      checked.add(ObdMetricType.fuelEconomy);
+      if (supported.contains(ObdMetricType.map) || supported.contains(ObdMetricType.rpm)) {
+        supported.add(ObdMetricType.fuelEconomy);
+      }
+    }
+
     state = state.copyWith(
       telemetry: current.copyWith(timestamp: DateTime.now()),
+      checkedSensors: checked,
+      supportedSensors: supported,
     );
   }
 

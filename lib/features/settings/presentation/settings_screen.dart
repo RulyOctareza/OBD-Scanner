@@ -12,6 +12,26 @@ class SettingsScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final obdState = ref.watch(obdServiceProvider);
 
+    ref.listen<ObdState>(obdServiceProvider, (previous, next) {
+      if (next.status == ObdStatus.error && next.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: AppColors.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (next.status == ObdStatus.connected && previous?.status != ObdStatus.connected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Terhubung ke ${next.connectedDeviceName ?? "OBD-II"}'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -139,24 +159,52 @@ class SettingsScreen extends ConsumerWidget {
                       itemBuilder: (context, index) {
                         final device = devices[index];
                         final isConnected = obdState.connectedDeviceAddress == device.address && 
-                                            obdState.status == ObdStatus.connected;
+                                             obdState.status == ObdStatus.connected;
+                        final isConnecting = obdState.connectedDeviceAddress == device.address && 
+                                             (obdState.status == ObdStatus.connecting || 
+                                              obdState.status == ObdStatus.initializing);
+                        final isAnyConnecting = obdState.status == ObdStatus.connecting || 
+                                                obdState.status == ObdStatus.initializing;
+
                         return ListTile(
                           leading: Icon(
                             Icons.bluetooth_rounded, 
-                            color: isConnected ? AppColors.success : AppColors.textSecondary
+                            color: isConnected 
+                                ? AppColors.success 
+                                : (isConnecting ? AppColors.primary : AppColors.textSecondary)
                           ),
                           title: Text(device.name ?? 'Perangkat Tanpa Nama'),
                           subtitle: Text(device.address),
                           trailing: isConnected
                               ? OutlinedButton(
-                                  style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(color: AppColors.danger),
+                                    foregroundColor: AppColors.danger,
+                                  ),
                                   onPressed: () => ref.read(obdServiceProvider.notifier).disconnect(),
-                                  child: const Text('Putus', style: TextStyle(color: AppColors.danger)),
+                                  child: const Text('Putus'),
                                 )
-                              : FilledButton(
-                                  onPressed: () => ref.read(obdServiceProvider.notifier).connectToDevice(device),
-                                  child: const Text('Hubungkan'),
-                                ),
+                              : isConnecting
+                                  ? FilledButton(
+                                      onPressed: null,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: AppColors.primary.withOpacity(0.15),
+                                      ),
+                                      child: const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                                        ),
+                                      ),
+                                    )
+                                  : FilledButton(
+                                      onPressed: isAnyConnecting
+                                          ? null
+                                          : () => ref.read(obdServiceProvider.notifier).connectToDevice(device),
+                                      child: const Text('Hubungkan'),
+                                    ),
                         );
                       },
                     );
