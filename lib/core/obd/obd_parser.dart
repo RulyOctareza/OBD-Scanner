@@ -122,32 +122,81 @@ class ObdParser {
     return null;
   }
 
-  /// Parses OBD DTC response from Mode 03
+  /// Parses OBD DTC response from Mode 03 (Active DTCs)
   /// Returns a list of DTC codes like ["P0138", "P0115"]
   static List<String> parseDtc(String response) {
+    return parseDtcFromMode(response, '43');
+  }
+
+  /// Parses OBD Pending DTC response from Mode 07
+  static List<String> parsePendingDtc(String response) {
+    return parseDtcFromMode(response, '47');
+  }
+
+  /// Parses OBD Permanent DTC response from Mode 0A
+  static List<String> parsePermanentDtc(String response) {
+    return parseDtcFromMode(response, '4A');
+  }
+
+  /// Generic DTC parser given expected mode header ('43', '47', '4A')
+  static List<String> parseDtcFromMode(String response, String modeHeader) {
     final codes = <String>[];
-    // Clean response (remove spaces, prompt characters, echo)
-    final cleaned = response.replaceAll(RegExp(r'\s+'), '').replaceAll('>', '');
+    final cleaned = response.replaceAll(RegExp(r'\s+'), '').replaceAll('>', '').toUpperCase();
     
-    // Typically Mode 03 response starts with 43
-    // E.g., 43 02 01 38 01 15 -> 430201380115
-    // Here: 43 is mode, 02 is count of codes. Then 01 38 -> P0138, 01 15 -> P0115
-    if (!cleaned.startsWith('43') || cleaned.length < 6) return codes;
+    final index = cleaned.lastIndexOf(modeHeader);
+    if (index == -1 || cleaned.length < index + 6) return codes;
     
-    // Each code is 4 hex digits (2 bytes). Let's extract them starting at index 4 (skip 43 and the count byte)
-    // Actually, sometimes ELM327 returns multiple lines or raw hex
-    final payload = cleaned.substring(4); // Skip '43' and the count byte
+    final payload = cleaned.substring(index + 4); // Skip header (2 chars) and count byte (2 chars)
     for (int i = 0; i < payload.length - 3; i += 4) {
       if (i + 4 > payload.length) break;
       final codeHex = payload.substring(i, i + 4);
       if (codeHex == '0000') continue; // padding
       
       final dtc = _hexToDtc(codeHex);
-      if (dtc != null) {
+      if (dtc != null && !codes.contains(dtc)) {
         codes.add(dtc);
       }
     }
     return codes;
+  }
+
+  /// Parses PID 0101 (I/M Readiness) response: "41 01 AA BB CC DD"
+  /// Returns map of monitor statuses and MIL indicator
+  static Map<String, bool>? parseImReadiness(String response) {
+    final bytes = _extractPayloadBytes(response, '01');
+    if (bytes == null || bytes.length < 4) return null;
+
+    final byteA = bytes[0]; // Bit 7 = MIL state, Bit 0-6 = DTC Count
+    final byteB = bytes[1]; // Continuous tests (Misfire, Fuel, Components)
+    final byteC = bytes[2]; // Non-continuous tests ready status
+    final byteD = bytes[3]; // Non-continuous tests enabled status
+
+    final isMilOn = (byteA & 0x80) != 0;
+    final dtcCount = byteA & 0x7F;
+
+    // Bit tests for continuous readiness (0 = Complete/Passed)
+    final misfireReady = (byteB & 0x11) == 0;
+    final fuelSystemReady = (byteB & 0x22) == 0;
+    final componentsReady = (byteB & 0x44) == 0;
+
+    // Non-continuous readiness
+    final catalystReady = (byteC & 0x01) == 0;
+    final evapReady = (byteC & 0x04) == 0;
+    final o2SensorReady = (byteC & 0x20) == 0;
+    final o2HeaterReady = (byteC & 0x40) == 0;
+    final egrReady = (byteC & 0x80) == 0;
+
+    return {
+      'mil': isMilOn,
+      'misfire': misfireReady,
+      'fuelSystem': fuelSystemReady,
+      'components': componentsReady,
+      'catalyst': catalystReady,
+      'evap': evapReady,
+      'o2Sensor': o2SensorReady,
+      'o2Heater': o2HeaterReady,
+      'egr': egrReady,
+    };
   }
 
   static String? _hexToDtc(String hex) {
@@ -171,14 +220,9 @@ class ObdParser {
         return null;
     }
     
-    // Convert first hex digit to its DTC numeric equivalent
-    // The first digit of the DTC represents:
-    // P0xxx, P1xxx, P2xxx, P3xxx etc.
-    // In OBD-II standard, the first two bits represent category, next two represent first digit.
-    // Let's simplify: hex 0138 -> P0138
     final secondDigit = int.tryParse(firstChar, radix: 16);
     if (secondDigit == null) return null;
-    final displayFirstDigit = secondDigit & 3; // Bitmask to get first digit (0, 1, 2, 3)
+    final displayFirstDigit = secondDigit & 3;
     
     return '$category$displayFirstDigit${hex.substring(1)}';
   }

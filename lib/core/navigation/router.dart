@@ -6,6 +6,8 @@ import '../../features/live_data/presentation/live_data_screen.dart';
 import '../../features/live_data/presentation/dashboard_screen.dart';
 import '../../features/timeline/presentation/timeline_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
+import '../../features/diagnostics/presentation/diagnostic_scanner_screen.dart';
+import '../../features/diagnostics/presentation/dtc_lookup_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final GlobalKey<NavigatorState> _healthNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'health');
@@ -19,6 +21,16 @@ final goRouter = GoRouter(
   initialLocation: '/health',
   debugLogDiagnostics: true,
   routes: [
+    GoRoute(
+      path: '/diagnostics',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const DiagnosticScannerScreen(),
+    ),
+    GoRoute(
+      path: '/dtc_lookup',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const DtcLookupScreen(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return ShellScreen(navigationShell: navigationShell);

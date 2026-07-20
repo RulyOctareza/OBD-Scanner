@@ -48,6 +48,18 @@ class ObdSimulator {
     if (injectedDtcs != null) _injectedDtcs = injectedDtcs;
   }
 
+  void clearDtcs() {
+    _injectedDtcs = [];
+    _updateSimulation();
+  }
+
+  void injectDtc(String code) {
+    if (!_injectedDtcs.contains(code)) {
+      _injectedDtcs = [..._injectedDtcs, code];
+      _updateSimulation();
+    }
+  }
+
   void _updateSimulation() {
     if (!_isEngineRunning) {
       // Engine Off: 0 RPM, 0 Speed, ~12.2V, ambient coolant

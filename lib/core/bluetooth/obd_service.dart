@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -9,9 +10,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../obd/obd_parser.dart';
 import '../obd/obd_simulator.dart';
 import '../obd/obd_telemetry.dart';
+import '../database/database.dart';
 import '../database/database_provider.dart';
 import '../../features/settings/presentation/settings_provider.dart';
 import '../../features/live_data/presentation/widgets/gauge_widget.dart';
+
+class DiagnosticScanResult {
+  final List<String> activeDtcs;
+  final List<String> pendingDtcs;
+  final List<String> permanentDtcs;
+  final Map<String, bool> imReadiness;
+
+  DiagnosticScanResult({
+    required this.activeDtcs,
+    required this.pendingDtcs,
+    required this.permanentDtcs,
+    required this.imReadiness,
+  });
+}
 
 enum ObdStatus {
   disconnected,
@@ -519,6 +535,113 @@ class ObdService extends StateNotifier<ObdState> {
       checkedSensors: checked,
       supportedSensors: supported,
     );
+  }
+
+  Future<DiagnosticScanResult> performFullDiagnosticScan() async {
+    if (state.isSimulatorMode) {
+      final active = List<String>.from(state.telemetry.dtcs);
+      return DiagnosticScanResult(
+        activeDtcs: active,
+        pendingDtcs: const [],
+        permanentDtcs: const [],
+        imReadiness: {
+          'mil': active.isNotEmpty,
+          'misfire': true,
+          'fuelSystem': true,
+          'components': true,
+          'catalyst': true,
+          'evap': true,
+          'o2Sensor': true,
+          'o2Heater': true,
+          'egr': true,
+        },
+      );
+    }
+
+    List<String> activeDtcs = [];
+    List<String> pendingDtcs = [];
+    List<String> permanentDtcs = [];
+    Map<String, bool> readiness = {};
+
+    try {
+      final mode03Resp = await _sendAndAwaitResponse('03\r', timeout: const Duration(seconds: 4));
+      activeDtcs = ObdParser.parseDtc(mode03Resp);
+    } catch (e) {
+      debugPrint("Mode 03 scan error: $e");
+    }
+
+    try {
+      final mode07Resp = await _sendAndAwaitResponse('07\r', timeout: const Duration(seconds: 4));
+      pendingDtcs = ObdParser.parsePendingDtc(mode07Resp);
+    } catch (e) {
+      debugPrint("Mode 07 scan error: $e");
+    }
+
+    try {
+      final mode0AResp = await _sendAndAwaitResponse('0A\r', timeout: const Duration(seconds: 4));
+      permanentDtcs = ObdParser.parsePermanentDtc(mode0AResp);
+    } catch (e) {
+      debugPrint("Mode 0A scan error: $e");
+    }
+
+    try {
+      final pid0101Resp = await _sendAndAwaitResponse('0101\r', timeout: const Duration(seconds: 4));
+      readiness = ObdParser.parseImReadiness(pid0101Resp) ?? {};
+    } catch (e) {
+      debugPrint("PID 0101 scan error: $e");
+    }
+
+    state = state.copyWith(
+      telemetry: state.telemetry.copyWith(dtcs: activeDtcs),
+    );
+
+    return DiagnosticScanResult(
+      activeDtcs: activeDtcs,
+      pendingDtcs: pendingDtcs,
+      permanentDtcs: permanentDtcs,
+      imReadiness: readiness,
+    );
+  }
+
+  Future<bool> clearDtcCodes() async {
+    final currentDtcs = List<String>.from(state.telemetry.dtcs);
+    if (state.isSimulatorMode) {
+      _simulator.clearDtcs();
+      state = state.copyWith(
+        telemetry: state.telemetry.copyWith(dtcs: []),
+      );
+    } else {
+      try {
+        await _sendAndAwaitResponse('04\r', timeout: const Duration(seconds: 5));
+        state = state.copyWith(
+          telemetry: state.telemetry.copyWith(dtcs: []),
+        );
+      } catch (e) {
+        debugPrint("Failed to clear DTC codes: $e");
+        return false;
+      }
+    }
+
+    try {
+      final db = _ref.read(databaseProvider);
+      final now = DateTime.now();
+      for (final code in currentDtcs) {
+        await db.into(db.dtcLogs).insert(
+          DtcLogsCompanion.insert(
+            timestamp: now,
+            code: code,
+            description: 'Penghapusan via Scanner Diagnostik',
+            category: code.startsWith('P') ? 'Powertrain' : (code.startsWith('C') ? 'Chassis' : 'Body/Network'),
+            active: const Value(false),
+            resolvedTime: Value(now),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Failed to save cleared DTC log: $e");
+    }
+
+    return true;
   }
 
   void _onConnectionLost(String reason) {

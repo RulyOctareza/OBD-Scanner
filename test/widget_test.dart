@@ -9,7 +9,7 @@ void main() {
         child: AutoCareApp(),
       ),
     );
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 4));
     expect(find.text('AGYA'), findsOneWidget);
   });
 }

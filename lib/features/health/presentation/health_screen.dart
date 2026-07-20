@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
@@ -60,6 +61,10 @@ class HealthScreen extends ConsumerWidget {
 
             // Health Score Ring Card
             _buildHealthHero(context, healthReport),
+            const SizedBox(height: 16),
+
+            // Diagnostic Scanner Banner Button
+            _buildDiagnosticScannerCard(context, obdState),
             const SizedBox(height: 20),
 
             // Live Trip Recording Active Banner
@@ -471,6 +476,87 @@ class HealthScreen extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticScannerCard(BuildContext context, ObdState obdState) {
+    final hasDtcs = obdState.telemetry.dtcs.isNotEmpty;
+
+    return Card(
+      color: hasDtcs ? AppColors.danger.withOpacity(0.12) : AppColors.surface,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(
+          color: hasDtcs ? AppColors.danger.withOpacity(0.5) : AppColors.primary.withOpacity(0.3),
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => context.push('/diagnostics'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: hasDtcs ? AppColors.danger.withOpacity(0.2) : AppColors.primary.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.radar_rounded,
+                  color: hasDtcs ? AppColors.danger : AppColors.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Pindai Diagnostik ECU',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        if (hasDtcs) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${obdState.telemetry.dtcs.length} DTC',
+                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasDtcs
+                          ? 'Terdeteksi kode kesalahan aktif! Ketuk untuk diagnosa & reset.'
+                          : 'Periksa DTC, status emisi (I/M Readiness), dan reset Check Engine.',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: hasDtcs ? AppColors.danger : AppColors.textSecondary,
+                size: 14,
+              ),
+            ],
+          ),
         ),
       ),
     );
