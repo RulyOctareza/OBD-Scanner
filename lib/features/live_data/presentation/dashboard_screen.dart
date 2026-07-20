@@ -40,7 +40,8 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
-    return state.checkedSensors.contains(type) && !state.supportedSensors.contains(type);
+    return state.checkedSensors.contains(type) &&
+        !state.supportedSensors.contains(type);
   }
 
   void _showMetricSelector({
@@ -78,44 +79,60 @@ class DashboardScreen extends ConsumerWidget {
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
-                  children: ObdMetricConfig.all.where((config) {
-                    final isChecked = obdState.checkedSensors.contains(config.type);
-                    final isSupported = obdState.supportedSensors.contains(config.type);
-                    return !(isChecked && !isSupported);
-                  }).map((config) {
-                    final isSelected = config.type == currentSelection;
-                    final val = _getValueForMetric(config.type, telemetry);
-                    final isVoltageOrFuelEco = config.type == ObdMetricType.voltage || config.type == ObdMetricType.fuelEconomy;
-                    return ListTile(
-                      selected: isSelected,
-                      selectedTileColor: config.color.withOpacity(0.1),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      leading: Icon(
-                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                        color: config.color,
-                      ),
-                      title: Text(
-                        config.label,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      trailing: Text(
-                        val == null
-                            ? '-- ${config.unit}'
-                            : (config.type == ObdMetricType.fuelEconomy && val == 0.0)
+                  children: ObdMetricConfig.all
+                      .where((config) {
+                        final isChecked = obdState.checkedSensors.contains(
+                          config.type,
+                        );
+                        final isSupported = obdState.supportedSensors.contains(
+                          config.type,
+                        );
+                        return !(isChecked && !isSupported);
+                      })
+                      .map((config) {
+                        final isSelected = config.type == currentSelection;
+                        final val = _getValueForMetric(config.type, telemetry);
+                        final isVoltageOrFuelEco =
+                            config.type == ObdMetricType.voltage ||
+                            config.type == ObdMetricType.fuelEconomy;
+                        return ListTile(
+                          selected: isSelected,
+                          selectedTileColor: config.color.withOpacity(0.1),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          leading: Icon(
+                            isSelected
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_off,
+                            color: config.color,
+                          ),
+                          title: Text(
+                            config.label,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          trailing: Text(
+                            val == null
+                                ? '-- ${config.unit}'
+                                : (config.type == ObdMetricType.fuelEconomy &&
+                                      val == 0.0)
                                 ? '-- ${config.unit}'
                                 : '${val.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}',
-                        style: TextStyle(
-                          color: config.color,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                      onTap: () {
-                        ref.read(settingsProvider.notifier).setMetricAt(spotIndex, config.type);
-                        Navigator.pop(context);
-                      },
-                    );
-                  }).toList(),
+                            style: TextStyle(
+                              color: config.color,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                          onTap: () {
+                            ref
+                                .read(settingsProvider.notifier)
+                                .setMetricAt(spotIndex, config.type);
+                            Navigator.pop(context);
+                          },
+                        );
+                      })
+                      .toList(),
                 ),
               ),
             ],
@@ -129,15 +146,22 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final obdState = ref.watch(obdServiceProvider);
     final telemetry = obdState.telemetry;
-    
+
     final settings = ref.watch(settingsProvider);
     final leftMetricType = settings.leftMetric;
     final rightMetricType = settings.rightMetric;
 
-    final leftConfig = ObdMetricConfig.all.firstWhere((c) => c.type == leftMetricType);
-    final rightConfig = ObdMetricConfig.all.firstWhere((c) => c.type == rightMetricType);
+    final leftConfig = ObdMetricConfig.all.firstWhere(
+      (c) => c.type == leftMetricType,
+    );
+    final rightConfig = ObdMetricConfig.all.firstWhere(
+      (c) => c.type == rightMetricType,
+    );
 
     final isFullscreen = settings.isFullscreenCockpit;
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait &&
+        !isFullscreen;
 
     return Scaffold(
       appBar: isFullscreen
@@ -145,7 +169,10 @@ class DashboardScreen extends ConsumerWidget {
           : AppBar(
               title: const Text(
                 'OBD2 COCKPIT METER',
-                style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2.0),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                ),
               ),
               centerTitle: true,
               backgroundColor: Colors.transparent,
@@ -153,9 +180,11 @@ class DashboardScreen extends ConsumerWidget {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.fullscreen_rounded),
-                  tooltip: 'Fullscreen',
+                  tooltip: 'Fullscreen Cockpit',
                   onPressed: () {
-                    ref.read(settingsProvider.notifier).setFullscreenCockpit(true);
+                    ref
+                        .read(settingsProvider.notifier)
+                        .setFullscreenCockpit(true);
                   },
                 ),
               ],
@@ -171,8 +200,8 @@ class DashboardScreen extends ConsumerWidget {
                       padding: EdgeInsets.only(
                         left: 16.0,
                         right: 16.0,
-                        top: isFullscreen ? 36.0 : 12.0,
-                        bottom: 8.0,
+                        top: isFullscreen ? 36.0 : 8.0,
+                        bottom: 4.0,
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -181,63 +210,205 @@ class DashboardScreen extends ConsumerWidget {
                               constraints: BoxConstraints(
                                 minHeight: constraints.maxHeight,
                               ),
-                              child: IntrinsicHeight(
-                                child: Column(
-                                  children: [
-                                    if (obdState.status == ObdStatus.connected ||
-                                        obdState.status == ObdStatus.initializing) ...[
-                                      _buildTripHeaderRow(context, ref, telemetry),
-                                      const SizedBox(height: 8),
-                                    ],
-                                    // 1. Main Gauges Row
+                              child: Column(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  if (obdState.status == ObdStatus.connected ||
+                                      obdState.status ==
+                                          ObdStatus.initializing) ...[
+                                    _buildTripHeaderRow(
+                                      context,
+                                      ref,
+                                      telemetry,
+                                      isPortrait: isPortrait,
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+
+                                  // 1. Main Gauges Section (Adaptive: Stacked Vertical in Portrait with compact mode, Side-by-side Row in Landscape)
+                                  if (isPortrait)
+                                    Column(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
+                                          child: GaugeWidget(
+                                            value: _getValueForMetric(
+                                              leftMetricType,
+                                              telemetry,
+                                            ),
+                                            config: leftConfig,
+                                            compact: true,
+                                            onTap: () => _showMetricSelector(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 0,
+                                              currentSelection: leftMetricType,
+                                              telemetry: telemetry,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
+                                          child: GaugeWidget(
+                                            value: _getValueForMetric(
+                                              rightMetricType,
+                                              telemetry,
+                                            ),
+                                            config: rightConfig,
+                                            compact: true,
+                                            onTap: () => _showMetricSelector(
+                                              context: context,
+                                              ref: ref,
+                                              spotIndex: 1,
+                                              currentSelection: rightMetricType,
+                                              telemetry: telemetry,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  else
                                     Expanded(
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
                                         children: [
-                                           Expanded(
+                                          Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                  ),
                                               child: GaugeWidget(
-                                                value: _getValueForMetric(leftMetricType, telemetry),
-                                                config: leftConfig,
-                                                onTap: () => _showMetricSelector(
-                                                  context: context,
-                                                  ref: ref,
-                                                  spotIndex: 0,
-                                                  currentSelection: leftMetricType,
-                                                  telemetry: telemetry,
+                                                value: _getValueForMetric(
+                                                  leftMetricType,
+                                                  telemetry,
                                                 ),
+                                                config: leftConfig,
+                                                onTap: () =>
+                                                    _showMetricSelector(
+                                                      context: context,
+                                                      ref: ref,
+                                                      spotIndex: 0,
+                                                      currentSelection:
+                                                          leftMetricType,
+                                                      telemetry: telemetry,
+                                                    ),
                                               ),
                                             ),
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                  ),
                                               child: GaugeWidget(
-                                                value: _getValueForMetric(rightMetricType, telemetry),
-                                                config: rightConfig,
-                                                onTap: () => _showMetricSelector(
-                                                  context: context,
-                                                  ref: ref,
-                                                  spotIndex: 1,
-                                                  currentSelection: rightMetricType,
-                                                  telemetry: telemetry,
+                                                value: _getValueForMetric(
+                                                  rightMetricType,
+                                                  telemetry,
                                                 ),
+                                                config: rightConfig,
+                                                onTap: () =>
+                                                    _showMetricSelector(
+                                                      context: context,
+                                                      ref: ref,
+                                                      spotIndex: 1,
+                                                      currentSelection:
+                                                          rightMetricType,
+                                                      telemetry: telemetry,
+                                                    ),
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    const SizedBox(height: 12),
-                                    // 2. Small Stats Row (Secondary Indicators)
+
+                                  const SizedBox(height: 14),
+
+                                  // 2. Small Stats Row / Grid (Adaptive: 2x2 Grid in Portrait, 1 Row in Landscape)
+                                  if (isPortrait)
+                                    Column(
+                                      children: [
+                                        Row(
+                                          children: [
+                                            if (!_isMetricUnsupported(
+                                              settings.smallMetric1,
+                                              obdState,
+                                            ))
+                                              _buildInteractiveSmallStatCard(
+                                                context: context,
+                                                ref: ref,
+                                                spotIndex: 2,
+                                                metricType:
+                                                    settings.smallMetric1,
+                                                telemetry: telemetry,
+                                              ),
+                                            if (!_isMetricUnsupported(
+                                              settings.smallMetric2,
+                                              obdState,
+                                            ))
+                                              _buildInteractiveSmallStatCard(
+                                                context: context,
+                                                ref: ref,
+                                                spotIndex: 3,
+                                                metricType:
+                                                    settings.smallMetric2,
+                                                telemetry: telemetry,
+                                              ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            if (!_isMetricUnsupported(
+                                              settings.smallMetric3,
+                                              obdState,
+                                            ))
+                                              _buildInteractiveSmallStatCard(
+                                                context: context,
+                                                ref: ref,
+                                                spotIndex: 4,
+                                                metricType:
+                                                    settings.smallMetric3,
+                                                telemetry: telemetry,
+                                              ),
+                                            if (!_isMetricUnsupported(
+                                              settings.smallMetric4,
+                                              obdState,
+                                            ))
+                                              _buildInteractiveSmallStatCard(
+                                                context: context,
+                                                ref: ref,
+                                                spotIndex: 5,
+                                                metricType:
+                                                    settings.smallMetric4,
+                                                telemetry: telemetry,
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  else
                                     SizedBox(
                                       height: 52,
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
                                         children: [
-                                          if (!_isMetricUnsupported(settings.smallMetric1, obdState))
+                                          if (!_isMetricUnsupported(
+                                            settings.smallMetric1,
+                                            obdState,
+                                          ))
                                             _buildInteractiveSmallStatCard(
                                               context: context,
                                               ref: ref,
@@ -245,7 +416,10 @@ class DashboardScreen extends ConsumerWidget {
                                               metricType: settings.smallMetric1,
                                               telemetry: telemetry,
                                             ),
-                                          if (!_isMetricUnsupported(settings.smallMetric2, obdState))
+                                          if (!_isMetricUnsupported(
+                                            settings.smallMetric2,
+                                            obdState,
+                                          ))
                                             _buildInteractiveSmallStatCard(
                                               context: context,
                                               ref: ref,
@@ -253,7 +427,10 @@ class DashboardScreen extends ConsumerWidget {
                                               metricType: settings.smallMetric2,
                                               telemetry: telemetry,
                                             ),
-                                          if (!_isMetricUnsupported(settings.smallMetric3, obdState))
+                                          if (!_isMetricUnsupported(
+                                            settings.smallMetric3,
+                                            obdState,
+                                          ))
                                             _buildInteractiveSmallStatCard(
                                               context: context,
                                               ref: ref,
@@ -261,7 +438,10 @@ class DashboardScreen extends ConsumerWidget {
                                               metricType: settings.smallMetric3,
                                               telemetry: telemetry,
                                             ),
-                                          if (!_isMetricUnsupported(settings.smallMetric4, obdState))
+                                          if (!_isMetricUnsupported(
+                                            settings.smallMetric4,
+                                            obdState,
+                                          ))
                                             _buildInteractiveSmallStatCard(
                                               context: context,
                                               ref: ref,
@@ -272,8 +452,7 @@ class DashboardScreen extends ConsumerWidget {
                                         ],
                                       ),
                                     ),
-                                  ],
-                                ),
+                                ],
                               ),
                             ),
                           );
@@ -290,7 +469,9 @@ class DashboardScreen extends ConsumerWidget {
                     color: Colors.black38,
                     child: InkWell(
                       onTap: () {
-                        ref.read(settingsProvider.notifier).setFullscreenCockpit(false);
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setFullscreenCockpit(false);
                       },
                       child: const Padding(
                         padding: EdgeInsets.all(8.0),
@@ -310,7 +491,167 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTripHeaderRow(BuildContext context, WidgetRef ref, ObdTelemetry telemetry) {
+  Widget _buildTripHeaderRow(
+    BuildContext context,
+    WidgetRef ref,
+    ObdTelemetry telemetry, {
+    required bool isPortrait,
+  }) {
+    final ecoBadge = AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: telemetry.isEcoMode ? 1.0 : 0.2,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: telemetry.isEcoMode
+              ? const Color(0xFF33FF33).withOpacity(0.15)
+              : Colors.white10,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: telemetry.isEcoMode
+                ? const Color(0xFF33FF33)
+                : Colors.white24,
+            width: 1.5,
+          ),
+          boxShadow: telemetry.isEcoMode
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF33FF33).withOpacity(0.35),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.eco_rounded,
+              color: telemetry.isEcoMode
+                  ? const Color(0xFF33FF33)
+                  : Colors.white30,
+              size: 14,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'ECO MODE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+                color: telemetry.isEcoMode
+                    ? const Color(0xFF33FF33)
+                    : Colors.white30,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final tripARecord = GestureDetector(
+      onLongPress: () => _showResetTripADialog(context, ref),
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tekan lama untuk mereset Trip A'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white12, width: 1),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.trip_origin_rounded,
+                color: Colors.blueAccent,
+                size: 12,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'TRIP A: ${ref.watch(tripRecorderProvider).tripADistance.toStringAsFixed(1)} km',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white70,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final tripBRecord = GestureDetector(
+      onLongPress: () => _showResetTripBDialog(context, ref),
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tekan lama untuk mereset Trip B'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white12, width: 1),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.today_rounded,
+                color: Colors.orangeAccent,
+                size: 12,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'TRIP B: ${ref.watch(tripRecorderProvider).tripBDistance.toStringAsFixed(1)} km',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white70,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (isPortrait) {
+      return Column(
+        children: [
+          Center(child: ecoBadge),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: tripARecord),
+              const SizedBox(width: 12),
+              Expanded(child: tripBRecord),
+            ],
+          ),
+        ],
+      );
+    }
+
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -322,44 +663,7 @@ class DashboardScreen extends ConsumerWidget {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),
-                    child: GestureDetector(
-                      onLongPress: () => _showResetTripADialog(context, ref),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Tekan lama untuk mereset Trip A'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white12, width: 1),
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.trip_origin_rounded, color: Colors.blueAccent, size: 12),
-                              const SizedBox(width: 6),
-                              Text(
-                                'TRIP A: ${ref.watch(tripRecorderProvider).tripADistance.toStringAsFixed(1)} km',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white70,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    child: tripARecord,
                   ),
                 ),
               ),
@@ -370,88 +674,14 @@ class DashboardScreen extends ConsumerWidget {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black45,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white12, width: 1),
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.today_rounded, color: Colors.orangeAccent, size: 12),
-                            const SizedBox(width: 6),
-                            Text(
-                              'TRIP B: ${ref.watch(tripRecorderProvider).tripBDistance.toStringAsFixed(1)} km',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white70,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    child: tripBRecord,
                   ),
                 ),
               ),
             ),
           ],
         ),
-        Align(
-          alignment: Alignment.center,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: telemetry.isEcoMode ? 1.0 : 0.15,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: telemetry.isEcoMode 
-                    ? const Color(0xFF33FF33).withOpacity(0.15) 
-                    : Colors.white10,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: telemetry.isEcoMode 
-                      ? const Color(0xFF33FF33) 
-                      : Colors.white24,
-                  width: 1.5,
-                ),
-                boxShadow: telemetry.isEcoMode ? [
-                  BoxShadow(
-                    color: const Color(0xFF33FF33).withOpacity(0.4),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  )
-                ] : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.eco_rounded,
-                    color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'ECO',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                      color: telemetry.isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        Align(alignment: Alignment.center, child: ecoBadge),
       ],
     );
   }
@@ -465,12 +695,14 @@ class DashboardScreen extends ConsumerWidget {
   }) {
     final config = ObdMetricConfig.all.firstWhere((c) => c.type == metricType);
     final value = _getValueForMetric(metricType, telemetry);
-    final isVoltageOrFuelEco = metricType == ObdMetricType.voltage || metricType == ObdMetricType.fuelEconomy;
+    final isVoltageOrFuelEco =
+        metricType == ObdMetricType.voltage ||
+        metricType == ObdMetricType.fuelEconomy;
     final valueText = value == null
         ? '-- ${config.unit}'
         : (metricType == ObdMetricType.fuelEconomy && value == 0.0)
-            ? '-- ${config.unit}'
-            : '${value.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}';
+        ? '-- ${config.unit}'
+        : '${value.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}';
 
     return Expanded(
       child: GestureDetector(
@@ -618,12 +850,21 @@ class DashboardScreen extends ConsumerWidget {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          title: const Text('Reset Trip A?', style: TextStyle(color: AppColors.textPrimary)),
-          content: const Text('Apakah Anda ingin mereset jarak akumulasi Trip A kembali ke 0.0 km?', style: TextStyle(color: AppColors.textSecondary)),
+          title: const Text(
+            'Reset Trip A?',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: const Text(
+            'Apakah Anda ingin mereset jarak akumulasi Trip A kembali ke 0.0 km?',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('BATAL', style: TextStyle(color: Colors.white54)),
+              child: const Text(
+                'BATAL',
+                style: TextStyle(color: Colors.white54),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -633,7 +874,13 @@ class DashboardScreen extends ConsumerWidget {
                   const SnackBar(content: Text('Trip A berhasil di-reset')),
                 );
               },
-              child: const Text('RESET', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'RESET',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         );
@@ -641,4 +888,47 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  void _showResetTripBDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text(
+            'Reset Trip B?',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+          content: const Text(
+            'Apakah Anda ingin mereset jarak akumulasi Trip B kembali ke 0.0 km?',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'BATAL',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                ref.read(tripRecorderProvider.notifier).resetTripB();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Trip B berhasil di-reset')),
+                );
+              },
+              child: const Text(
+                'RESET',
+                style: TextStyle(
+                  color: Colors.orangeAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

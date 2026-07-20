@@ -84,15 +84,11 @@ class ObdTelemetry {
     );
   }
 
-  /// Calculates dynamically if the driving style is economical.
-  /// Similar to the ECO indicator in Toyota Agya/modern cars.
+  /// Calculates dynamically if driving style is economical.
+  /// Conditions: RPM 1200 - 2000, Speed > 10 km/h, Throttle < 25%, Engine Load < 40%.
   bool get isEcoMode {
-    if (rpm < 500) return false; // Engine off or starting
-    // Economical criteria: low throttle, moderate engine load, stable/normal RPM.
-    if (speed == 0) {
-      return throttle < 15 && engineLoad < 25; // Idle eco
-    }
-    return throttle < 22 && engineLoad < 38 && rpm < 2600;
+    if (speed <= 10.0) return false; // ECO light is off when stopped or crawling under 10 km/h
+    return rpm >= 1200 && rpm <= 2000 && throttle < 25.0 && engineLoad < 40.0;
   }
 
   /// Dynamic calculation of fuel consumption in km/L using Speed-Density (MAP) or MAF

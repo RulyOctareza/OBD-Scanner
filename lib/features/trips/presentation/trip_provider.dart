@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/obd/obd_telemetry.dart';
 import '../../settings/presentation/settings_provider.dart';
 
 class TripRecorderState {
@@ -92,6 +93,9 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
   Timer? _tripTimer;
   int _activeTripId = -1;
   DateTime? _lastTickTime;
+  DateTime? _lastSpeedTime;
+  DateTime? _lastDbSaveTime;
+  double _accumulatedTripLiters = 0.0;
   SharedPreferences? _prefs;
   String _currentTripBDate = '';
 
@@ -100,12 +104,12 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     // Listen to OBD State changes
     _ref.listen(obdServiceProvider, (previous, next) {
       final isEngineOn = next.telemetry.rpm > 500;
+      final isVehicleMoving = next.telemetry.speed > 0.0 || next.telemetry.rpm >= 1100;
       final isConnected = next.status == ObdStatus.connected;
       
-      if (isConnected && isEngineOn && !state.isRecording) {
+      if (isConnected && isEngineOn && isVehicleMoving && !state.isRecording) {
         _startTrip();
       } else if ((!isConnected || !isEngineOn) && state.isRecording) {
-        // Stop trip if engine off or disconnected for > 15 seconds (reduced for simulation/responsiveness)
         _stopTrip();
       }
 
@@ -171,9 +175,24 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     state = state.copyWith(tripADistance: 0.0);
   }
 
+  Future<void> resetTripB() async {
+    final db = _ref.read(databaseProvider);
+    await db.setDoublePreference('trip_b_distance', 0.0);
+    state = state.copyWith(tripBDistance: 0.0);
+  }
+
+  void _saveTripPreferencesToDb() {
+    final db = _ref.read(databaseProvider);
+    db.setDoublePreference('trip_a_distance', state.tripADistance);
+    db.setDoublePreference('trip_b_distance', state.tripBDistance);
+    db.setPreference('trip_b_date', _currentTripBDate);
+  }
+
   Future<void> _startTrip() async {
     final now = DateTime.now();
     _lastTickTime = now;
+    _lastSpeedTime = now;
+    _accumulatedTripLiters = 0.0;
 
     // Insert trip into DB
     final db = _ref.read(databaseProvider);
@@ -216,41 +235,59 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
           : 1;
       _lastTickTime = nowTick;
 
+      final newDuration = state.durationSeconds + deltaSec;
       state = state.copyWith(
-        durationSeconds: state.durationSeconds + deltaSec,
+        durationSeconds: newDuration,
       );
+
+      // Periodically save preferences to DB every 5 seconds to reduce I/O
+      if (newDuration % 5 == 0) {
+        _saveTripPreferencesToDb();
+      }
     });
   }
 
-  void _updateTripData(dynamic telemetry) {
-    final speed = telemetry.speed as double;
-    final rpm = telemetry.rpm as double;
-    final coolant = telemetry.coolant as double;
+  void _updateTripData(ObdTelemetry telemetry) {
+    final speed = telemetry.speed;
+    final rpm = telemetry.rpm;
+    final coolant = telemetry.coolant;
+    final now = DateTime.now();
 
-    // Calculate distance delta: distance = speed (km/h) * time (seconds) / 3600
-    final timeFactor = 1.0 / 3600.0; // Assuming ~1 second update intervals
-    final distanceDelta = speed * timeFactor;
+    double distanceDelta = 0.0;
+    double litersDelta = 0.0;
+
+    // Calculate exact distance & fuel consumed based on REAL timestamp delta
+    if (_lastSpeedTime != null) {
+      final deltaSeconds = now.difference(_lastSpeedTime!).inMilliseconds / 1000.0;
+      // Guard against unrealistic deltas (e.g. initial start or connection pause > 10s)
+      if (deltaSeconds > 0 && deltaSeconds < 10.0) {
+        if (speed > 0) {
+          distanceDelta = (speed * deltaSeconds) / 3600.0;
+        }
+
+        final realKml = telemetry.fuelEconomy;
+        if (realKml > 0 && distanceDelta > 0) {
+          litersDelta = distanceDelta / realKml;
+        }
+      }
+    }
+    _lastSpeedTime = now;
 
     final newDistance = state.currentTripDistance + distanceDelta;
     final isIdle = speed < 1.0;
+    _accumulatedTripLiters += litersDelta;
 
     // Update Trip A and B
     double newTripA = state.tripADistance + distanceDelta;
     
-    // Verify Trip B date hasn't rolled over during execution
     final todayStr = _getTodayDateString();
     double newTripB;
-    final db = _ref.read(databaseProvider);
     if (_currentTripBDate == todayStr) {
       newTripB = state.tripBDistance + distanceDelta;
     } else {
       newTripB = distanceDelta;
       _currentTripBDate = todayStr;
-      db.setPreference('trip_b_date', todayStr);
     }
-
-    db.setDoublePreference('trip_a_distance', newTripA);
-    db.setDoublePreference('trip_b_distance', newTripB);
 
     state = state.copyWith(
       currentTripDistance: newDistance,
@@ -264,20 +301,24 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
       tripBDistance: newTripB,
     );
 
-    // Save trip point to DB for plotting charts
-    db.into(db.tripPoints).insert(
-      TripPointsCompanion.insert(
-        tripId: _activeTripId,
-        timestamp: DateTime.now(),
-        rpm: rpm,
-        speed: speed,
-        coolant: coolant,
-        voltage: telemetry.voltage as double,
-        mapValue: telemetry.mapValue as double,
-        throttle: Value(telemetry.throttle as double),
-        engineLoad: Value(telemetry.engineLoad as double),
-      ),
-    );
+    // Save trip point to DB for plotting charts (throttled to 1Hz)
+    if (_lastDbSaveTime == null || now.difference(_lastDbSaveTime!).inMilliseconds >= 1000) {
+      _lastDbSaveTime = now;
+      final db = _ref.read(databaseProvider);
+      db.into(db.tripPoints).insert(
+        TripPointsCompanion.insert(
+          tripId: _activeTripId,
+          timestamp: now,
+          rpm: rpm,
+          speed: speed,
+          coolant: coolant,
+          voltage: telemetry.voltage,
+          mapValue: telemetry.mapValue,
+          throttle: Value(telemetry.throttle),
+          engineLoad: Value(telemetry.engineLoad),
+        ),
+      );
+    }
   }
 
   Future<void> _stopTrip() async {
@@ -294,11 +335,10 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
         ? state.accumulatedSpeed / state.speedTicksCount 
         : 0.0;
         
-    // Calculate fuel economy: Toyota Agya 1.0 averages ~15.0 km/L. Let's fluctuate based on idle time
-    final idlePercentage = state.durationSeconds > 0 
-        ? (state.idleSeconds / state.durationSeconds) 
-        : 0.0;
-    final fuelEconomy = 16.0 - (idlePercentage * 5.0); // ranges between 11 km/L and 16 km/L
+    // Calculate real fuel economy from accumulated liters or fallback to 15 km/L
+    final fuelEconomy = _accumulatedTripLiters > 0 && state.currentTripDistance > 0
+        ? state.currentTripDistance / _accumulatedTripLiters
+        : 15.0;
 
     // Calculate Health Score for this trip (based on max coolant / voltage dips)
     int tripHealth = 100;
@@ -309,6 +349,9 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     final currentOdo = _ref.read(settingsProvider).currentOdometer;
     final newOdo = currentOdo + state.currentTripDistance;
     _ref.read(settingsProvider.notifier).updateOdometer(newOdo);
+
+    // Save preferences to DB
+    _saveTripPreferencesToDb();
 
     // Update Trip record
     await (db.update(db.trips)..where((t) => t.id.equals(_activeTripId))).write(

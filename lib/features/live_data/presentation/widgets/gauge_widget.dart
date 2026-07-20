@@ -125,12 +125,14 @@ class GaugeWidget extends StatefulWidget {
   final double? value;
   final ObdMetricConfig config;
   final VoidCallback onTap;
+  final bool compact;
 
   const GaugeWidget({
     super.key,
     required this.value,
     required this.config,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
@@ -201,7 +203,9 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
         return GestureDetector(
           onTap: widget.onTap,
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: widget.compact 
+                ? const EdgeInsets.symmetric(vertical: 6, horizontal: 10) 
+                : const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.background.withOpacity(0.4),
               borderRadius: BorderRadius.circular(20),
@@ -272,63 +276,66 @@ class _GaugeWidgetState extends State<GaugeWidget> with SingleTickerProviderStat
                       ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: widget.compact ? 4 : 8),
                 // Futuristic Segmented Gauge Outer Frame
-                SizedBox(
-                  width: 180,
-                  height: 180,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CustomPaint(
-                        size: const Size(180, 180),
-                        painter: GaugePainter(
-                          value: displayValue,
-                          minValue: widget.config.minValue,
-                          maxValue: widget.config.maxValue,
-                          activeColor: widget.config.color,
-                          backgroundColor: AppColors.surface,
-                          warningThreshold: widget.config.warningThreshold,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: SizedBox(
+                    width: widget.compact ? 135 : 180,
+                    height: widget.compact ? 135 : 180,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CustomPaint(
+                          size: Size(widget.compact ? 135 : 180, widget.compact ? 135 : 180),
+                          painter: GaugePainter(
+                            value: displayValue,
+                            minValue: widget.config.minValue,
+                            maxValue: widget.config.maxValue,
+                            activeColor: widget.config.color,
+                            backgroundColor: AppColors.surface,
+                            warningThreshold: widget.config.warningThreshold,
+                          ),
                         ),
-                      ),
-                      // Center Digital Readout
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 12),
-                          Text(
-                            widget.value == null
-                                ? '--'
-                                : displayValue.toStringAsFixed(widget.config.type == ObdMetricType.voltage ? 1 : 0),
-                            style: TextStyle(
-                              fontSize: 38,
-                              fontWeight: FontWeight.w900,
-                              color: isWarning ? const Color(0xFFFF3366) : Colors.white,
-                              fontFamily: 'monospace',
-                              shadows: [
-                                Shadow(
-                                  color: isWarning 
-                                      ? const Color(0xFFFF3366).withOpacity(0.6) 
-                                      : widget.config.color.withOpacity(0.4),
-                                  blurRadius: 10,
-                                ),
-                              ],
+                        // Center Digital Readout
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(height: widget.compact ? 6 : 12),
+                            Text(
+                              widget.value == null
+                                  ? '--'
+                                  : displayValue.toStringAsFixed(widget.config.type == ObdMetricType.voltage ? 1 : 0),
+                              style: TextStyle(
+                                fontSize: widget.compact ? 30 : 38,
+                                fontWeight: FontWeight.w900,
+                                color: isWarning ? const Color(0xFFFF3366) : Colors.white,
+                                fontFamily: 'monospace',
+                                shadows: [
+                                  Shadow(
+                                    color: isWarning 
+                                        ? const Color(0xFFFF3366).withOpacity(0.6) 
+                                        : widget.config.color.withOpacity(0.4),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Text(
-                            widget.config.unit,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: widget.config.color.withOpacity(0.7),
+                            Text(
+                              widget.config.unit,
+                              style: TextStyle(
+                                fontSize: widget.compact ? 10 : 12,
+                                fontWeight: FontWeight.bold,
+                                color: widget.config.color.withOpacity(0.7),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: widget.compact ? 4 : 8),
                 // Label showing metric name & tap instruction
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
