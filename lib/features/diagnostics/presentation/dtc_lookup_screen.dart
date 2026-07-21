@@ -187,6 +187,7 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
         severityColor = AppColors.warning;
         break;
       case DtcSeverity.info:
+      default:
         severityColor = AppColors.primary;
         break;
     }
@@ -443,11 +444,15 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // const Text(
-                  //   'Rekomendasi',
-                  //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
-                  // ),
-                  // const SizedBox(height: 6),
+                  const Text(
+                    'Rekomendasi Tindakan',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   ...dtc.recommendations.map(
                     (rec) => Padding(
                       padding: const EdgeInsets.only(bottom: 6),
