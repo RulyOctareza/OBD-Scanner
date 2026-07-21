@@ -7,6 +7,8 @@ import '../obd/obd_telemetry.dart';
 import 'database.dart';
 import 'database_provider.dart';
 
+import '../../features/settings/presentation/settings_provider.dart';
+
 final tripManagerProvider = Provider<TripManager>((ref) {
   final manager = TripManager(
     ref.read(databaseProvider),
@@ -45,6 +47,14 @@ class TripManager {
   }
 
   Future<void> _handleObdState(ObdState state) async {
+    final isSimulatorMode = _ref.read(settingsProvider).isSimulatorMode || state.isSimulatorMode;
+    if (isSimulatorMode) {
+      if (_currentTripId != null) {
+        await _endCurrentTrip();
+      }
+      return;
+    }
+
     if (state.status == ObdStatus.connected) {
       final rpm = state.telemetry.rpm;
       
@@ -53,9 +63,9 @@ class TripManager {
         await _startNewTrip();
       }
 
-      // Record telemetry if trip is active
+      // Record telemetry
+      await _recordTelemetry(state.telemetry);
       if (_currentTripId != null) {
-        await _recordTelemetry(state.telemetry);
         await _updateLocation();
       }
     } else {
@@ -71,9 +81,7 @@ class TripManager {
       final state = _ref.read(obdServiceProvider);
       // If engine is off for a while, end trip
       if (state.telemetry.rpm == 0 && state.status == ObdStatus.connected) {
-        // Here we could implement a delay, but for now we'll end it immediately if checked
-        // Actually it's better to keep it alive if it's just 0 RPM (e.g. idle stop/start)
-        // For simplicity, we just rely on disconnect or extreme idle time.
+        // Keep trip active for short stops
       }
     }
   }
@@ -91,13 +99,19 @@ class TripManager {
     _currentTripId = trip;
   }
 
+  DateTime? _lastTelemetryRecordTime;
+
   Future<void> _recordTelemetry(ObdTelemetry telemetry) async {
-    if (_currentTripId == null) return;
-    
+    final now = DateTime.now();
+    if (_lastTelemetryRecordTime != null && now.difference(_lastTelemetryRecordTime!).inSeconds < 30) {
+      return;
+    }
+    _lastTelemetryRecordTime = now;
+
     await _db.into(_db.tripPoints).insert(
       TripPointsCompanion.insert(
-        tripId: _currentTripId!,
-        timestamp: DateTime.now(),
+        tripId: drift.Value(_currentTripId),
+        timestamp: now,
         rpm: telemetry.rpm,
         speed: telemetry.speed,
         coolant: telemetry.coolant,
@@ -105,6 +119,11 @@ class TripManager {
         mapValue: telemetry.mapValue,
         throttle: drift.Value(telemetry.throttle),
         engineLoad: drift.Value(telemetry.engineLoad),
+        fuel: drift.Value(telemetry.fuelLevel),
+        fuelEconomy: drift.Value(telemetry.fuelEconomy),
+        intakeAirTemp: drift.Value(telemetry.intakeAirTemp),
+        maf: drift.Value(telemetry.maf),
+        timingAdvance: drift.Value(telemetry.timingAdvance),
       ),
     );
   }

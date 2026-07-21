@@ -84,6 +84,51 @@ class ObdTelemetry {
     );
   }
 
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! ObdTelemetry) return false;
+    return rpm == other.rpm &&
+        speed == other.speed &&
+        coolant == other.coolant &&
+        voltage == other.voltage &&
+        mapValue == other.mapValue &&
+        throttle == other.throttle &&
+        engineLoad == other.engineLoad &&
+        intakeAirTemp == other.intakeAirTemp &&
+        maf == other.maf &&
+        timingAdvance == other.timingAdvance &&
+        _listEquals(dtcs, other.dtcs) &&
+        odometer == other.odometer &&
+        fuelLevel == other.fuelLevel;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        rpm,
+        speed,
+        coolant,
+        voltage,
+        mapValue,
+        throttle,
+        engineLoad,
+        intakeAirTemp,
+        maf,
+        timingAdvance,
+        Object.hashAll(dtcs),
+        odometer,
+        fuelLevel,
+      );
+
+  static bool _listEquals(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   /// Calculates dynamically if driving style is economical.
   /// Conditions: RPM 1200 - 2000, Speed > 10 km/h, Throttle < 25%, Engine Load < 40%.
   bool get isEcoMode {

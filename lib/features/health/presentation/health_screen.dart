@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/widgets/obd_connection_sheet.dart';
+import '../../../core/utils/usefulness_utils.dart';
 import '../../settings/presentation/settings_provider.dart';
 import '../../trips/presentation/trip_provider.dart';
+import '../../timeline/presentation/timeline_screen.dart';
 import '../domain/health_engine.dart';
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
@@ -18,10 +22,33 @@ class HealthScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final healthReport = ref.watch(healthProvider);
-    final obdState = ref.watch(obdServiceProvider);
-    final settings = ref.watch(settingsProvider);
+    final obdStatus = ref.watch(obdServiceProvider.select((s) => s.status));
+    final isSimulatorMode = ref.watch(
+      obdServiceProvider.select((s) => s.isSimulatorMode),
+    );
+    final connectedDeviceName = ref.watch(
+      obdServiceProvider.select((s) => s.connectedDeviceName),
+    );
+    final errorMessage = ref.watch(
+      obdServiceProvider.select((s) => s.errorMessage),
+    );
+    final dtcCount = ref.watch(
+      obdServiceProvider.select((s) => s.telemetry.dtcs.length),
+    );
+    final dtcCodes = ref.watch(
+      obdServiceProvider.select((s) => s.telemetry.dtcs.join(',')),
+    );
+    final vehicleName = ref.watch(
+      settingsProvider.select((s) => s.vehicleName),
+    );
     final tripState = ref.watch(tripRecorderProvider);
     final historicalTrips = ref.watch(historicalTripsProvider);
+    final liveSpeed = ref.watch(
+      obdServiceProvider.select((s) => s.telemetry.speed),
+    );
+    final liveRpm = ref.watch(
+      obdServiceProvider.select((s) => s.telemetry.rpm),
+    );
 
     // Listen to trip completion to show summary dialog
     ref.listen(tripRecorderProvider, (previous, next) {
@@ -30,10 +57,29 @@ class HealthScreen extends ConsumerWidget {
       }
     });
 
+    ref.listen(obdServiceProvider.select((s) => s.status), (previous, next) {
+      if (previous != ObdStatus.connected && next == ObdStatus.connected) {
+        HapticFeedback.lightImpact();
+      }
+    });
+
+    ref.listen(healthProvider.select((h) => h.warnings.length), (previous, next) {
+      if (previous != null && next > previous) {
+        HapticFeedback.mediumImpact();
+      }
+    });
+
+    final obdStateLite = _ObdBannerState(
+      status: obdStatus,
+      isSimulatorMode: isSimulatorMode,
+      connectedDeviceName: connectedDeviceName,
+      errorMessage: errorMessage,
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          settings.vehicleName.toUpperCase(),
+          vehicleName.toUpperCase(),
           style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
         ),
         centerTitle: true,
@@ -42,10 +88,12 @@ class HealthScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: Icon(
-              obdState.isSimulatorMode ? Icons.bolt : Icons.bluetooth,
-              color: obdState.status == ObdStatus.connected ? AppColors.success : AppColors.textSecondary,
+              isSimulatorMode ? Icons.bolt : Icons.bluetooth,
+              color: obdStatus == ObdStatus.connected
+                  ? AppColors.success
+                  : AppColors.textSecondary,
             ),
-            onPressed: () => _showConnectionBottomSheet(context, ref),
+            onPressed: () => showObdConnectionSheet(context, ref),
           )
         ],
       ),
@@ -56,7 +104,7 @@ class HealthScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Connection Status Banner
-            _buildConnectionBanner(context, ref, obdState),
+            _buildConnectionBanner(context, ref, obdStateLite),
             const SizedBox(height: 16),
 
             // Health Score Ring Card
@@ -64,12 +112,16 @@ class HealthScreen extends ConsumerWidget {
             const SizedBox(height: 16),
 
             // Diagnostic Scanner Banner Button
-            _buildDiagnosticScannerCard(context, obdState),
+            _buildDiagnosticScannerCard(
+              context,
+              dtcCount: dtcCount,
+              dtcCodes: dtcCodes.isEmpty ? const [] : dtcCodes.split(','),
+            ),
             const SizedBox(height: 20),
 
             // Live Trip Recording Active Banner
             if (tripState.isRecording) ...[
-              _buildLiveTripRecordingCard(tripState, obdState.telemetry),
+              _buildLiveTripRecordingCard(tripState, liveSpeed, liveRpm),
               const SizedBox(height: 20),
             ],
 
@@ -80,7 +132,7 @@ class HealthScreen extends ConsumerWidget {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 8),
-              ...healthReport.warnings.map((warning) => _buildWarningCard(warning)),
+              ...healthReport.warnings.map((warning) => _buildWarningCard(context, warning)),
               const SizedBox(height: 20),
             ],
 
@@ -106,7 +158,7 @@ class HealthScreen extends ConsumerWidget {
                     return _buildEmptyTripCard();
                   }
                   final lastTrip = trips.first;
-                  return _buildLastTripCard(lastTrip);
+                  return _buildLastTripCard(context, lastTrip, ref);
                 },
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Text('Gagal memuat perjalanan: $e'),
@@ -120,7 +172,11 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildConnectionBanner(BuildContext context, WidgetRef ref, ObdState obdState) {
+  Widget _buildConnectionBanner(
+    BuildContext context,
+    WidgetRef ref,
+    _ObdBannerState obdState,
+  ) {
     Color bannerColor;
     String bannerText;
     IconData icon;
@@ -128,8 +184,8 @@ class HealthScreen extends ConsumerWidget {
     switch (obdState.status) {
       case ObdStatus.connected:
         bannerColor = AppColors.success.withOpacity(0.15);
-        bannerText = obdState.isSimulatorMode 
-            ? 'Terhubung (Mode Simulator)' 
+        bannerText = obdState.isSimulatorMode
+            ? 'Terhubung (Mode Simulator)'
             : 'Terhubung ke ${obdState.connectedDeviceName}';
         icon = Icons.check_circle_outline_rounded;
         break;
@@ -145,7 +201,6 @@ class HealthScreen extends ConsumerWidget {
         icon = Icons.error_outline_rounded;
         break;
       case ObdStatus.disconnected:
-      default:
         bannerColor = AppColors.card;
         bannerText = 'Bluetooth Siaga (Ketuk untuk Hubungkan)';
         icon = Icons.bluetooth_disabled_rounded;
@@ -153,7 +208,7 @@ class HealthScreen extends ConsumerWidget {
     }
 
     return InkWell(
-      onTap: () => _showConnectionBottomSheet(context, ref),
+      onTap: () => showObdConnectionSheet(context, ref),
       borderRadius: AppBorderRadius.mdBorder,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm + 2),
@@ -183,218 +238,6 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  void _showConnectionBottomSheet(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xl)),
-      ),
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final obdState = ref.watch(obdServiceProvider);
-            
-            return Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.lg,
-                right: AppSpacing.lg,
-                top: AppSpacing.lg,
-                bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xxl,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.dragHandle,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Koneksi OBD-II ELM327',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Toggle Mode Simulator
-                  SwitchListTile(
-                    title: const Text('Mode Simulator'),
-                    subtitle: const Text('Simulasi data sensor tanpa ELM327 fisik'),
-                    value: obdState.isSimulatorMode,
-                    activeColor: AppColors.primary,
-                    onChanged: (val) {
-                      ref.read(settingsProvider.notifier).setSimulatorMode(val);
-                      ref.read(obdServiceProvider.notifier).toggleSimulatorMode(val);
-                      setState(() {});
-                    },
-                  ),
-                  const Divider(color: AppColors.card),
-                  
-                  if (!obdState.isSimulatorMode) ...[
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Pilih Perangkat ELM327',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 8),
-                    ref.watch(pairedDevicesProvider).when(
-                      loading: () => const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24.0),
-                          child: CircularProgressIndicator(),
-                        ),
-                      ),
-                      error: (err, stack) => Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 48),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Gagal memuat: $err',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => ref.refresh(pairedDevicesProvider),
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Pindai Ulang'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      data: (devices) {
-                        if (devices.isEmpty) {
-                          return Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.bluetooth_searching, size: 48, color: AppColors.textSecondary),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Perangkat tidak ditemukan',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Pastikan Bluetooth aktif, izin lokasi/bluetooth disetujui, dan ELM327 sudah dipairing di settings HP.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                ),
-                                const SizedBox(height: 16),
-                                ElevatedButton.icon(
-                                  onPressed: () => ref.refresh(pairedDevicesProvider),
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('Pindai Ulang'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-
-                        return Container(
-                          constraints: BoxConstraints(
-                            maxHeight: MediaQuery.of(context).size.height * 0.4,
-                          ),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            itemCount: devices.length,
-                            separatorBuilder: (context, idx) => const Divider(color: AppColors.card, height: 1),
-                            itemBuilder: (context, index) {
-                              final device = devices[index];
-                              final isConnected = obdState.connectedDeviceAddress == device.address &&
-                                  obdState.status == ObdStatus.connected;
-                              final isConnecting = obdState.connectedDeviceAddress == device.address &&
-                                  (obdState.status == ObdStatus.connecting || obdState.status == ObdStatus.initializing);
-
-                              return ListTile(
-                                leading: Icon(
-                                  Icons.bluetooth,
-                                  color: isConnected ? AppColors.success : AppColors.textSecondary,
-                                ),
-                                title: Text(device.name ?? 'Perangkat Tanpa Nama'),
-                                subtitle: Text(device.address),
-                                trailing: isConnected
-                                    ? OutlinedButton(
-                                        style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.danger)),
-                                        onPressed: () {
-                                          ref.read(obdServiceProvider.notifier).disconnect();
-                                        },
-                                        child: const Text('Putus', style: TextStyle(color: AppColors.danger)),
-                                      )
-                                    : isConnecting
-                                        ? const SizedBox(
-                                            width: 24,
-                                            height: 24,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          )
-                                        : FilledButton(
-                                            onPressed: () async {
-                                              Navigator.pop(context); // Close bottom sheet
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(content: Text('Menghubungkan ke ${device.name ?? "ELM327"}...')),
-                                              );
-                                              await ref.read(obdServiceProvider.notifier).connectToDevice(device);
-                                            },
-                                            child: const Text('Hubungkan'),
-                                          ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.info_outline, color: AppColors.primary),
-                            SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Aplikasi saat ini mensimulasikan data ECU mobil. Matikan Mode Simulator di atas untuk menghubungkan ke dongle Bluetooth ELM327 fisik Anda.',
-                                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Color _getStatusColor(ObdStatus status) {
     switch (status) {
       case ObdStatus.connected:
@@ -405,7 +248,6 @@ class HealthScreen extends ConsumerWidget {
       case ObdStatus.error:
         return AppColors.danger;
       case ObdStatus.disconnected:
-      default:
         return AppColors.textSecondary;
     }
   }
@@ -416,44 +258,53 @@ class HealthScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           children: [
-            // Circular Progress Score
             Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 140,
-                    height: 140,
-                    child: CircularProgressIndicator(
-                      value: report.score / 100,
-                      strokeWidth: 12,
-                      backgroundColor: AppColors.progressBackground,
-                      valueColor: AlwaysStoppedAnimation<Color>(report.statusColor),
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: report.score / 100),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutCubic,
+                builder: (context, animatedValue, child) {
+                  final displayScore = (animatedValue * 100).round();
+                  return Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Text(
-                        '${report.score}',
-                        style: AppTheme.numberStyle(
-                          fontSize: 44,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
+                      SizedBox(
+                        width: 140,
+                        height: 140,
+                        child: CircularProgressIndicator(
+                          value: animatedValue,
+                          strokeWidth: 12,
+                          backgroundColor: AppColors.progressBackground,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            report.statusColor,
+                          ),
                         ),
                       ),
-                      Text(
-                        'HEALTH SCORE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textSecondary,
-                          letterSpacing: 1.0,
-                        ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$displayScore',
+                            style: AppTheme.numberStyle(
+                              fontSize: 44,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const Text(
+                            'Skor Kesehatan',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textSecondary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 24),
@@ -481,8 +332,12 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDiagnosticScannerCard(BuildContext context, ObdState obdState) {
-    final hasDtcs = obdState.telemetry.dtcs.isNotEmpty;
+  Widget _buildDiagnosticScannerCard(
+    BuildContext context, {
+    required int dtcCount,
+    required List<String> dtcCodes,
+  }) {
+    final hasDtcs = dtcCount > 0;
 
     return Card(
       color: hasDtcs ? AppColors.danger.withOpacity(0.12) : AppColors.surface,
@@ -532,7 +387,7 @@ class HealthScreen extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              '${obdState.telemetry.dtcs.length} DTC',
+                              '$dtcCount DTC',
                               style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -562,7 +417,11 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLiveTripRecordingCard(TripRecorderState trip, dynamic telemetry) {
+  Widget _buildLiveTripRecordingCard(
+    TripRecorderState trip,
+    double speed,
+    double rpm,
+  ) {
     return Card(
       color: AppColors.primary.withOpacity(0.08),
       shape: RoundedRectangleBorder(
@@ -576,7 +435,7 @@ class HealthScreen extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.circle, color: AppColors.danger, size: 10),
+                const _RecordingPulseDot(),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -597,8 +456,8 @@ class HealthScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildTripLiveStat('Jarak', '${trip.currentTripDistance.toStringAsFixed(1)} km'),
-                _buildTripLiveStat('Speed', '${telemetry.speed.toStringAsFixed(0)} km/h'),
-                _buildTripLiveStat('RPM', '${telemetry.rpm.toStringAsFixed(0)}'),
+                _buildTripLiveStat('Speed', '${speed.toStringAsFixed(0)} km/h'),
+                _buildTripLiveStat('RPM', '${rpm.toStringAsFixed(0)}'),
               ],
             )
           ],
@@ -617,7 +476,8 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildWarningCard(String text) {
+  Widget _buildWarningCard(BuildContext context, String text) {
+    final route = warningActionRoute(text);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       color: AppColors.danger.withOpacity(0.08),
@@ -625,19 +485,49 @@ class HealthScreen extends ConsumerWidget {
         side: const BorderSide(color: AppColors.danger, width: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.3),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: route == null
+            ? null
+            : () {
+                if (route.startsWith('/diagnostics')) {
+                  context.push(route);
+                } else {
+                  context.go(route);
+                }
+              },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      text,
+                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.3),
+                    ),
+                    if (route != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        warningActionLabel(route),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
+              if (route != null)
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.primary),
+            ],
+          ),
         ),
       ),
     );
@@ -689,7 +579,7 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLastTripCard(Trip trip) {
+  Widget _buildLastTripCard(BuildContext context, Trip trip, WidgetRef ref) {
     final format = DateFormat('dd MMM yyyy, HH:mm');
     final formattedTime = format.format(trip.startTime);
     final distanceText = '${trip.distance.toStringAsFixed(1)} km';
@@ -700,7 +590,9 @@ class HealthScreen extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
-          // Navigate to details (future v0.2)
+          ref.read(timelineFocusTripIdProvider.notifier).state = trip.id;
+          ref.read(selectedTypeFilterProvider.notifier).state = TypeFilter.trip;
+          context.go('/timeline');
         },
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -735,6 +627,14 @@ class HealthScreen extends ConsumerWidget {
                   _buildTripStat('Konsumsi', fuelText),
                   _buildTripStat('Durasi', durationText),
                 ],
+              ),
+              const SizedBox(height: 8),
+              const Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Ketuk untuk lihat di Linimasa',
+                  style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -894,6 +794,57 @@ class HealthScreen extends ConsumerWidget {
         const SizedBox(height: 4),
         Text(value, style: AppTheme.numberStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
       ],
+    );
+  }
+}
+
+class _ObdBannerState {
+  final ObdStatus status;
+  final bool isSimulatorMode;
+  final String? connectedDeviceName;
+  final String? errorMessage;
+
+  const _ObdBannerState({
+    required this.status,
+    required this.isSimulatorMode,
+    required this.connectedDeviceName,
+    required this.errorMessage,
+  });
+}
+
+class _RecordingPulseDot extends StatefulWidget {
+  const _RecordingPulseDot();
+
+  @override
+  State<_RecordingPulseDot> createState() => _RecordingPulseDotState();
+}
+
+class _RecordingPulseDotState extends State<_RecordingPulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 1.0).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: const Icon(Icons.circle, color: AppColors.danger, size: 10),
     );
   }
 }

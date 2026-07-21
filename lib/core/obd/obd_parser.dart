@@ -169,10 +169,9 @@ class ObdParser {
     final byteA = bytes[0]; // Bit 7 = MIL state, Bit 0-6 = DTC Count
     final byteB = bytes[1]; // Continuous tests (Misfire, Fuel, Components)
     final byteC = bytes[2]; // Non-continuous tests ready status
-    final byteD = bytes[3]; // Non-continuous tests enabled status
+    // bytes[3] = Non-continuous tests enabled status (reserved for future use)
 
     final isMilOn = (byteA & 0x80) != 0;
-    final dtcCount = byteA & 0x7F;
 
     // Bit tests for continuous readiness (0 = Complete/Passed)
     final misfireReady = (byteB & 0x11) == 0;
@@ -250,4 +249,76 @@ class ObdParser {
     } catch (_) {}
     return null;
   }
+
+  /// Parses ELM327 protocol response from "AT DP" or "AT DPN"
+  static String parseProtocol(String response) {
+    final cleaned = response.replaceAll('>', '').replaceAll('OK', '').replaceAll('\r', '').replaceAll('\n', '').trim();
+    if (cleaned.isEmpty || cleaned.contains('SEARCHING') || cleaned.contains('ERROR')) {
+      return 'ISO 15765-4 (CAN 11bit 500k)';
+    }
+    if (cleaned.startsWith('AUTO,')) {
+      return cleaned.substring(5).trim();
+    }
+    return cleaned;
+  }
+
+  /// Parses Mode 09 PID 02 Vehicle Identification Number (VIN)
+  static String? parseVin(String response) {
+    try {
+      final cleaned = response.replaceAll(RegExp(r'\r|\n|>'), ' ').toUpperCase();
+      final hexBytes = <int>[];
+      final tokens = cleaned.split(RegExp(r'\s+'));
+      bool foundModeHeader = false;
+
+      for (int i = 0; i < tokens.length; i++) {
+        final token = tokens[i];
+        if (token == '49' && i + 1 < tokens.length && tokens[i + 1] == '02') {
+          foundModeHeader = true;
+          i++;
+          continue;
+        }
+        if (foundModeHeader) {
+          if (token.length == 2) {
+            final val = int.tryParse(token, radix: 16);
+            if (val != null && val >= 0x20 && val <= 0x7E) {
+              hexBytes.add(val);
+            }
+          }
+        }
+      }
+
+      if (hexBytes.length >= 17) {
+        return String.fromCharCodes(hexBytes.sublist(hexBytes.length - 17));
+      } else if (hexBytes.isNotEmpty) {
+        return String.fromCharCodes(hexBytes);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Parses Supported PIDs count from Mode 01 PID 00/20/40/60
+  static int parseSupportedPidsCount(String response) {
+    int count = 0;
+    try {
+      final cleaned = response.replaceAll(RegExp(r'\s+'), '').replaceAll('>', '').toUpperCase();
+      final pids = ['00', '20', '40', '60'];
+      for (final pid in pids) {
+        final header = '41$pid';
+        final idx = cleaned.indexOf(header);
+        if (idx != -1 && idx + header.length + 8 <= cleaned.length) {
+          final hexStr = cleaned.substring(idx + header.length, idx + header.length + 8);
+          final val = int.tryParse(hexStr, radix: 16);
+          if (val != null) {
+            for (int bit = 0; bit < 32; bit++) {
+              if ((val & (1 << bit)) != 0) {
+                count++;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return count;
+  }
 }
+

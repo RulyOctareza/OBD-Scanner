@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/shell/shell_screen.dart';
@@ -8,6 +9,8 @@ import '../../features/timeline/presentation/timeline_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../features/diagnostics/presentation/diagnostic_scanner_screen.dart';
 import '../../features/diagnostics/presentation/dtc_lookup_screen.dart';
+import '../../features/splash/splash_screen.dart';
+import '../../features/splash/obd_intro_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final GlobalKey<NavigatorState> _healthNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'health');
@@ -18,9 +21,19 @@ final GlobalKey<NavigatorState> _settingsNavigatorKey = GlobalKey<NavigatorState
 
 final goRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: '/health',
-  debugLogDiagnostics: true,
+  initialLocation: '/splash',
+  debugLogDiagnostics: kDebugMode,
   routes: [
+    GoRoute(
+      path: '/splash',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/obd_intro',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const ObdIntroScreen(),
+    ),
     GoRoute(
       path: '/diagnostics',
       parentNavigatorKey: _rootNavigatorKey,
@@ -36,7 +49,6 @@ final goRouter = GoRouter(
         return ShellScreen(navigationShell: navigationShell);
       },
       branches: [
-        // Health (Home) Branch
         StatefulShellBranch(
           navigatorKey: _healthNavigatorKey,
           routes: [
@@ -48,7 +60,6 @@ final goRouter = GoRouter(
             ),
           ],
         ),
-        // Dashboard Branch (OBD2 Meter)
         StatefulShellBranch(
           navigatorKey: _dashboardNavigatorKey,
           routes: [
@@ -60,7 +71,6 @@ final goRouter = GoRouter(
             ),
           ],
         ),
-        // Live Data Branch
         StatefulShellBranch(
           navigatorKey: _liveDataNavigatorKey,
           routes: [
@@ -72,7 +82,6 @@ final goRouter = GoRouter(
             ),
           ],
         ),
-        // Timeline Branch
         StatefulShellBranch(
           navigatorKey: _timelineNavigatorKey,
           routes: [
@@ -84,7 +93,6 @@ final goRouter = GoRouter(
             ),
           ],
         ),
-        // Settings Branch
         StatefulShellBranch(
           navigatorKey: _settingsNavigatorKey,
           routes: [

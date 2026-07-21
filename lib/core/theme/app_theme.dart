@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const Color background = Color(0xFF0F1115);
@@ -8,18 +9,19 @@ class AppColors {
   static const Color success = Color(0xFF22C55E);
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
-  
+
   static const Color textPrimary = Color(0xFFEEEEEE);
   static const Color textSecondary = Color(0xFF888E96);
 
-  // Semantic UI/UX Refined colors
-  static const Color progressBackground = Color(0x1AEEEEEE); // grey/white opacity for ring
-  static const Color dragHandle = Color(0x3DFFFFFF); // white24 drag handle in sheets
-  static const Color timelineTrack = Color(0x1AFFFFFF); // white10 timeline line
+  static const Color progressBackground = Color(0x1AEEEEEE);
+  static const Color dragHandle = Color(0x3DFFFFFF);
+  static const Color timelineTrack = Color(0x1AFFFFFF);
 }
 
 class AppTheme {
   static ThemeData get darkTheme {
+    final baseText = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.background,
@@ -30,44 +32,38 @@ class AppTheme {
         onPrimary: Colors.white,
         onSurface: AppColors.textPrimary,
       ),
-      fontFamily: 'Inter', // Default to Inter font
+      textTheme: baseText.copyWith(
+        headlineLarge: baseText.headlineLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+          fontSize: 32,
+        ),
+        headlineMedium: baseText.headlineMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+          fontSize: 24,
+        ),
+        titleLarge: baseText.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: AppColors.textPrimary,
+          fontSize: 20,
+        ),
+        bodyLarge: baseText.bodyLarge?.copyWith(
+          fontWeight: FontWeight.normal,
+          color: AppColors.textPrimary,
+          fontSize: 16,
+        ),
+        bodyMedium: baseText.bodyMedium?.copyWith(
+          fontWeight: FontWeight.normal,
+          color: AppColors.textSecondary,
+          fontSize: 14,
+        ),
+      ),
       cardTheme: CardThemeData(
         color: AppColors.card,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-        ),
-      ),
-      textTheme: const TextTheme(
-        headlineLarge: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-          fontSize: 32,
-        ),
-        headlineMedium: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-          fontSize: 24,
-        ),
-        titleLarge: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-          fontSize: 20,
-        ),
-        bodyLarge: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.normal,
-          color: AppColors.textPrimary,
-          fontSize: 16,
-        ),
-        bodyMedium: TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.normal,
-          color: AppColors.textSecondary,
-          fontSize: 14,
         ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
@@ -80,14 +76,12 @@ class AppTheme {
     );
   }
 
-  // Monospace text style for numbers (e.g. JetBrains Mono)
   static TextStyle numberStyle({
     double fontSize = 16,
     FontWeight fontWeight = FontWeight.normal,
     Color color = AppColors.textPrimary,
   }) {
-    return TextStyle(
-      fontFamily: 'JetBrains Mono',
+    return GoogleFonts.jetBrainsMono(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,

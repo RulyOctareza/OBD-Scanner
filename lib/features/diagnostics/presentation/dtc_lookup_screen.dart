@@ -15,7 +15,13 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
   String _selectedCategory = 'Semua';
   List<DtcCode> _filteredCodes = [];
 
-  final List<String> _categories = ['Semua', 'Powertrain', 'Chassis', 'Body', 'Network'];
+  final List<String> _categories = [
+    'Semua',
+    'Powertrain',
+    'Chassis',
+    'Body',
+    'Network',
+  ];
 
   @override
   void initState() {
@@ -42,7 +48,10 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kamus Kode Kerusakan (DTC)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Kamus Kode Kerusakan (DTC)',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -56,7 +65,10 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                 onChanged: (_) => _onSearchChanged(),
                 decoration: InputDecoration(
                   hintText: 'Cari kode (misal: P0300, P0138, MAF)...',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: AppColors.primary,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.clear, size: 20),
@@ -68,7 +80,10 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                       : null,
                   filled: true,
                   fillColor: AppColors.surface,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
@@ -94,8 +109,12 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                     selectedColor: AppColors.primary.withOpacity(0.2),
                     checkmarkColor: AppColors.primary,
                     labelStyle: TextStyle(
-                      color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                     onSelected: (val) {
                       setState(() {
@@ -116,16 +135,26 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.search_off_rounded, size: 56, color: AppColors.textSecondary),
+                          const Icon(
+                            Icons.search_off_rounded,
+                            size: 56,
+                            color: AppColors.textSecondary,
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             'Kode "${_searchController.text}" tidak ditemukan',
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           const Text(
                             'Coba cari kata kunci lain atau pilih kategori Semua.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -158,7 +187,6 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
         severityColor = AppColors.warning;
         break;
       case DtcSeverity.info:
-      default:
         severityColor = AppColors.primary;
         break;
     }
@@ -177,7 +205,10 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: severityColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -199,25 +230,40 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                       children: [
                         Text(
                           dtc.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
                           'Kategori: ${dtc.category} • ${dtc.severity.label}',
-                          style: TextStyle(fontSize: 11, color: severityColor, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: severityColor,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textSecondary),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: AppColors.textSecondary,
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
               Text(
                 dtc.descriptionIndo,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.3),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.3,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -262,11 +308,16 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.danger.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.danger.withOpacity(0.4)),
+                          border: Border.all(
+                            color: AppColors.danger.withOpacity(0.4),
+                          ),
                         ),
                         child: Text(
                           dtc.code,
@@ -284,11 +335,17 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                           children: [
                             Text(
                               dtc.title,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               'Kategori ${dtc.category}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -301,65 +358,121 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
 
                   const Text(
                     'Deskripsi Masalah',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     dtc.descriptionIndo,
-                    style: const TextStyle(fontSize: 13, height: 1.4, color: AppColors.textPrimary),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 16),
 
                   const Text(
                     'Gejala yang Timbul',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  ...dtc.symptoms.map((symptom) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• ', style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold)),
-                            Expanded(child: Text(symptom, style: const TextStyle(fontSize: 13))),
-                          ],
-                        ),
-                      )),
+                  ...dtc.symptoms.map(
+                    (symptom) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '• ',
+                            style: TextStyle(
+                              color: AppColors.warning,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              symptom,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
                   const Text(
                     'Penyebab yang Mungkin',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  ...dtc.possibleCauses.map((cause) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• ', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
-                            Expanded(child: Text(cause, style: const TextStyle(fontSize: 13))),
-                          ],
-                        ),
-                      )),
+                  ...dtc.possibleCauses.map(
+                    (cause) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '• ',
+                            style: TextStyle(
+                              color: AppColors.danger,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              cause,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
-                  const Text(
-                    'Rekomendasi Tindakan',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                  // const Text(
+                  //   'Rekomendasi',
+                  //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                  // ),
+                  // const SizedBox(height: 6),
+                  ...dtc.recommendations.map(
+                    (rec) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_outline,
+                            color: AppColors.success,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              rec,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  ...dtc.recommendations.map((rec) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.check_circle_outline, color: AppColors.success, size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(rec, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-                          ],
-                        ),
-                      )),
                   const SizedBox(height: 24),
 
                   SizedBox(
@@ -367,11 +480,16 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: AppColors.card,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        'Tutup',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],

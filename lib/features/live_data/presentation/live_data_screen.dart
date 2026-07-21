@@ -3,13 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/widgets/obd_connection_sheet.dart';
 import 'widgets/gauge_widget.dart';
+import 'widgets/telemetry_chart_modal.dart';
 
 class LiveDataScreen extends ConsumerWidget {
   const LiveDataScreen({super.key});
 
   bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
-    return state.checkedSensors.contains(type) && !state.supportedSensors.contains(type);
+    return state.checkedSensors.contains(type) &&
+        !state.supportedSensors.contains(type);
   }
 
   @override
@@ -20,18 +23,20 @@ class LiveDataScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'LIVE TELEMETRI',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          'Semua Sensor',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SafeArea(
-        child:
-            obdState.status != ObdStatus.connected &&
+        child: obdState.status != ObdStatus.connected &&
                 obdState.status != ObdStatus.initializing
-            ? _buildNotConnected(obdState)
+            ? ObdNotConnectedView(
+                state: obdState,
+                onConnect: () => showObdConnectionSheet(context, ref),
+              )
             : GridView.count(
                 padding: const EdgeInsets.all(AppSpacing.lg),
                 crossAxisCount: 2,
@@ -41,9 +46,11 @@ class LiveDataScreen extends ConsumerWidget {
                 children: [
                   if (!_isMetricUnsupported(ObdMetricType.rpm, obdState))
                     _buildMetricCard(
-                      'RPM',
+                      context,
+                      ObdMetricType.rpm,
+                      'Putaran Mesin',
                       telemetry.rpm.toStringAsFixed(0),
-                      'rpm',
+                      'RPM',
                       icon: Icons.speed_rounded,
                       color: telemetry.rpm > 3500
                           ? AppColors.warning
@@ -51,6 +58,8 @@ class LiveDataScreen extends ConsumerWidget {
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.speed, obdState))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.speed,
                       'Kecepatan',
                       telemetry.speed.toStringAsFixed(0),
                       'km/h',
@@ -61,18 +70,22 @@ class LiveDataScreen extends ConsumerWidget {
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.coolant, obdState))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.coolant,
                       'Suhu Pendingin',
                       '${telemetry.coolant.toStringAsFixed(0)}°',
-                      'Celsius',
+                      '°C',
                       icon: Icons.thermostat_rounded,
                       color: telemetry.coolant > 100
                           ? AppColors.danger
                           : (telemetry.coolant > 95
-                                ? AppColors.warning
-                                : AppColors.success),
+                              ? AppColors.warning
+                              : AppColors.success),
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.voltage, obdState))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.voltage,
                       'Tegangan Aki',
                       '${telemetry.voltage.toStringAsFixed(1)}V',
                       'Volt',
@@ -83,6 +96,8 @@ class LiveDataScreen extends ConsumerWidget {
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.throttle, obdState))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.throttle,
                       'Bukaan Gas',
                       '${telemetry.throttle.toStringAsFixed(0)}%',
                       'Throttle',
@@ -91,6 +106,8 @@ class LiveDataScreen extends ConsumerWidget {
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.engineLoad, obdState))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.engineLoad,
                       'Beban Mesin',
                       '${telemetry.engineLoad.toStringAsFixed(0)}%',
                       'Engine Load',
@@ -101,14 +118,21 @@ class LiveDataScreen extends ConsumerWidget {
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.map, obdState))
                     _buildMetricCard(
-                      'Intake (MAP)',
+                      context,
+                      ObdMetricType.map,
+                      'Tekanan Intake',
                       '${telemetry.mapValue.toStringAsFixed(0)}',
-                      'kPa',
+                      'MAP · kPa',
                       icon: Icons.compress_rounded,
                       color: AppColors.primary,
                     ),
-                  if (!_isMetricUnsupported(ObdMetricType.intakeAirTemp, obdState))
+                  if (!_isMetricUnsupported(
+                    ObdMetricType.intakeAirTemp,
+                    obdState,
+                  ))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.intakeAirTemp,
                       'Suhu Intake',
                       telemetry.intakeAirTemp != null
                           ? '${telemetry.intakeAirTemp!.toStringAsFixed(0)}°'
@@ -117,24 +141,31 @@ class LiveDataScreen extends ConsumerWidget {
                       icon: Icons.ac_unit_rounded,
                       color: telemetry.intakeAirTemp != null
                           ? (telemetry.intakeAirTemp! > 70
-                                ? AppColors.danger
-                                : telemetry.intakeAirTemp! > 50
-                                    ? AppColors.warning
-                                    : AppColors.success)
+                              ? AppColors.danger
+                              : telemetry.intakeAirTemp! > 50
+                                  ? AppColors.warning
+                                  : AppColors.success)
                           : AppColors.textSecondary,
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.maf, obdState))
                     _buildMetricCard(
-                      'MAF',
+                      context,
+                      ObdMetricType.maf,
+                      'Aliran Udara',
                       telemetry.maf != null
                           ? telemetry.maf!.toStringAsFixed(1)
                           : '--',
-                      'g/s',
+                      'MAF · g/s',
                       icon: Icons.air_rounded,
                       color: AppColors.primary,
                     ),
-                  if (!_isMetricUnsupported(ObdMetricType.timingAdvance, obdState))
+                  if (!_isMetricUnsupported(
+                    ObdMetricType.timingAdvance,
+                    obdState,
+                  ))
                     _buildMetricCard(
+                      context,
+                      ObdMetricType.timingAdvance,
                       'Timing Advance',
                       telemetry.timingAdvance != null
                           ? telemetry.timingAdvance!.toStringAsFixed(1)
@@ -149,45 +180,9 @@ class LiveDataScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildNotConnected(ObdState state) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.dashboard_customize_outlined,
-              size: 64,
-              color: AppColors.textSecondary.withOpacity(0.3),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Mesin Belum Terhubung',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              state.status == ObdStatus.connecting
-                  ? 'Menghubungkan ke ELM327...'
-                  : 'Aktifkan Bluetooth mobil atau masuk ke menu Settings untuk mengaktifkan Simulator.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMetricCard(
+    BuildContext context,
+    ObdMetricType metricType,
     String label,
     String value,
     String unit, {
@@ -195,47 +190,79 @@ class LiveDataScreen extends ConsumerWidget {
     required Color color,
   }) {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => TelemetryChartModal.show(context, metricType),
+        splashColor: color.withOpacity(0.15),
+        highlightColor: color.withOpacity(0.08),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                Icon(icon, color: color.withOpacity(0.8), size: 18),
-              ],
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: AppTheme.numberStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.show_chart_rounded,
+                        color: color.withOpacity(0.5),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(icon, color: color.withOpacity(0.9), size: 18),
+                    ],
                   ),
-                ),
-                Text(
-                  unit,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: AppTheme.numberStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        unit,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        'Ketuk untuk Grafik',
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w500,
+                          color: color.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

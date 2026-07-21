@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../core/database/database.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/obd/vin_decoder.dart';
 import 'package:autocare/features/live_data/presentation/widgets/gauge_widget.dart';
 import 'package:drift/drift.dart';
 
@@ -10,6 +11,7 @@ class SettingsState {
   final double currentOdometer;
   final double nextOilOdometer;
   final String vehicleName;
+  final String vehicleVin;
   final bool isSimulatorMode;
   final bool isIgnitionOn;
   final ObdMetricType leftMetric;
@@ -21,11 +23,14 @@ class SettingsState {
   final bool isFullscreenCockpit;
   final bool autoConnectOBD;
   final String lastOBDAddress;
+  final bool hasCompletedObdIntro;
+  final bool isLoaded;
 
   SettingsState({
     required this.currentOdometer,
     required this.nextOilOdometer,
     required this.vehicleName,
+    this.vehicleVin = '',
     required this.isSimulatorMode,
     required this.isIgnitionOn,
     required this.leftMetric,
@@ -37,12 +42,15 @@ class SettingsState {
     required this.isFullscreenCockpit,
     required this.autoConnectOBD,
     required this.lastOBDAddress,
+    required this.hasCompletedObdIntro,
+    this.isLoaded = false,
   });
 
   SettingsState copyWith({
     double? currentOdometer,
     double? nextOilOdometer,
     String? vehicleName,
+    String? vehicleVin,
     bool? isSimulatorMode,
     bool? isIgnitionOn,
     ObdMetricType? leftMetric,
@@ -54,11 +62,14 @@ class SettingsState {
     bool? isFullscreenCockpit,
     bool? autoConnectOBD,
     String? lastOBDAddress,
+    bool? hasCompletedObdIntro,
+    bool? isLoaded,
   }) {
     return SettingsState(
       currentOdometer: currentOdometer ?? this.currentOdometer,
       nextOilOdometer: nextOilOdometer ?? this.nextOilOdometer,
       vehicleName: vehicleName ?? this.vehicleName,
+      vehicleVin: vehicleVin ?? this.vehicleVin,
       isSimulatorMode: isSimulatorMode ?? this.isSimulatorMode,
       isIgnitionOn: isIgnitionOn ?? this.isIgnitionOn,
       leftMetric: leftMetric ?? this.leftMetric,
@@ -70,6 +81,8 @@ class SettingsState {
       isFullscreenCockpit: isFullscreenCockpit ?? this.isFullscreenCockpit,
       autoConnectOBD: autoConnectOBD ?? this.autoConnectOBD,
       lastOBDAddress: lastOBDAddress ?? this.lastOBDAddress,
+      hasCompletedObdIntro: hasCompletedObdIntro ?? this.hasCompletedObdIntro,
+      isLoaded: isLoaded ?? this.isLoaded,
     );
   }
 }
@@ -82,6 +95,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     currentOdometer: 161420.0,
     nextOilOdometer: 166420.0,
     vehicleName: "Agya",
+    vehicleVin: '',
     isSimulatorMode: false,
     isIgnitionOn: true,
     leftMetric: ObdMetricType.rpm,
@@ -93,6 +107,8 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     isFullscreenCockpit: false,
     autoConnectOBD: true,
     lastOBDAddress: "",
+    hasCompletedObdIntro: false,
+    isLoaded: false,
   )) {
     _initPrefs();
     
@@ -111,6 +127,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
     // 1. Try loading from SQLite database
     String? name = await db.getPreference('vehicle_name');
+    String? vin = await db.getPreference('vehicle_vin');
     double? nextOil = await db.getDoublePreference('next_oil_odometer');
     bool? simMode = await db.getBoolPreference('is_simulator_mode');
     bool? ignition = await db.getBoolPreference('is_ignition_on');
@@ -128,11 +145,16 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     // Auto connect preferences
     bool? autoConnect = await db.getBoolPreference('auto_connect_obd');
     String? lastAddr = await db.getPreference('last_obd_device_address');
+    bool? hasIntro = await db.getBoolPreference('has_completed_obd_intro');
 
     // 2. Fallback to SharedPreferences (legacy migration) and then default values
     if (name == null) {
       name = _prefs!.getString('vehicle_name') ?? "Agya";
       await db.setPreference('vehicle_name', name);
+    }
+    vin ??= _prefs!.getString('vehicle_vin') ?? '';
+    if (vin.isNotEmpty) {
+      await db.setPreference('vehicle_vin', vin);
     }
     if (nextOil == null) {
       nextOil = _prefs!.getDouble('next_oil_odometer') ?? 166420.0;
@@ -227,6 +249,11 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await db.setPreference('last_obd_device_address', lastAddr);
     }
 
+    if (hasIntro == null) {
+      hasIntro = _prefs!.getBool('has_completed_obd_intro') ?? false;
+      await db.setBoolPreference('has_completed_obd_intro', hasIntro);
+    }
+
     // Try loading odometer from database Vehicles table
     double odo = currentOdo;
     try {
@@ -247,6 +274,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       currentOdometer: odo,
       nextOilOdometer: nextOil,
       vehicleName: name,
+      vehicleVin: vin,
       isSimulatorMode: simMode,
       isIgnitionOn: ignition,
       leftMetric: leftMetric,
@@ -258,7 +286,17 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       isFullscreenCockpit: isFullscreen,
       autoConnectOBD: autoConnect,
       lastOBDAddress: lastAddr,
+      hasCompletedObdIntro: hasIntro,
+      isLoaded: true,
     );
+
+    // Keep OBD runtime aligned with restored preference (idempotent).
+    _ref.read(obdServiceProvider.notifier).applySimulatorMode(simMode);
+    if (simMode) {
+      _ref.read(obdServiceProvider.notifier).configureSimulator(
+            isEngineRunning: ignition,
+          );
+    }
   }
 
   Future<void> updateOdometer(double val) async {
@@ -298,14 +336,67 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     } catch (_) {}
   }
 
-  Future<void> setSimulatorMode(bool val) async {
+  /// Applies identity fields discovered from ECU (VIN Mode 09 + odometer PID A6).
+  Future<void> applyEcuVehicleIdentity({
+    String? vin,
+    double? odometer,
+    bool overwriteName = true,
+  }) async {
+    final db = _ref.read(databaseProvider);
+
+    if (vin != null && VinDecoder.isValidVin(vin)) {
+      final cleaned = vin.trim().toUpperCase();
+      state = state.copyWith(vehicleVin: cleaned);
+      await db.setPreference('vehicle_vin', cleaned);
+
+      if (overwriteName) {
+        final decoded = VinDecoder.displayNameFromVin(cleaned);
+        if (decoded != null && decoded.isNotEmpty) {
+          await updateVehicleName(decoded);
+        }
+      }
+    }
+
+    if (odometer != null && odometer > 0) {
+      await updateOdometer(odometer);
+    }
+  }
+
+  /// Pulls VIN + odometer from the connected ECU / simulator.
+  Future<EcuVehicleIdentityResult> syncVehicleIdentityFromEcu() async {
+    final identity =
+        await _ref.read(obdServiceProvider.notifier).fetchVehicleIdentity();
+    if (!identity.success) {
+      return identity;
+    }
+    await applyEcuVehicleIdentity(
+      vin: identity.vin,
+      odometer: identity.odometer,
+    );
+    return identity;
+  }
+
+  Future<void> setSimulatorMode(bool val, {bool syncObd = true}) async {
     state = state.copyWith(isSimulatorMode: val);
     await _ref.read(databaseProvider).setBoolPreference('is_simulator_mode', val);
+    if (syncObd) {
+      _ref.read(obdServiceProvider.notifier).applySimulatorMode(val);
+    }
+    if (val) {
+      // Simulator exposes a stable demo VIN + live odometer.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      await syncVehicleIdentityFromEcu();
+    }
   }
 
   Future<void> setIgnitionOn(bool val) async {
     state = state.copyWith(isIgnitionOn: val);
     await _ref.read(databaseProvider).setBoolPreference('is_ignition_on', val);
+    if (state.isSimulatorMode) {
+      _ref.read(obdServiceProvider.notifier).configureSimulator(
+            isEngineRunning: val,
+          );
+    }
   }
 
   Future<void> setMetricAt(int index, ObdMetricType newMetric) async {
@@ -371,6 +462,14 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     if (state.lastOBDAddress == address) return;
     state = state.copyWith(lastOBDAddress: address);
     await _ref.read(databaseProvider).setPreference('last_obd_device_address', address);
+  }
+
+  Future<void> setObdIntroCompleted(bool val) async {
+    state = state.copyWith(hasCompletedObdIntro: val);
+    final db = _ref.read(databaseProvider);
+    await db.setBoolPreference('has_completed_obd_intro', val);
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.setBool('has_completed_obd_intro', val);
   }
 }
 

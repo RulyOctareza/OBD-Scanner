@@ -1,16 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
 import 'settings_provider.dart';
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _isSyncingVehicle = false;
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final obdState = ref.watch(obdServiceProvider);
+    final obdStatus = ref.watch(obdServiceProvider.select((s) => s.status));
+    final connectedDeviceAddress = ref.watch(
+      obdServiceProvider.select((s) => s.connectedDeviceAddress),
+    );
 
     ref.listen<ObdState>(obdServiceProvider, (previous, next) {
       if (next.status == ObdStatus.error && next.errorMessage != null) {
@@ -21,10 +32,14 @@ class SettingsScreen extends ConsumerWidget {
             behavior: SnackBarBehavior.floating,
           ),
         );
-      } else if (next.status == ObdStatus.connected && previous?.status != ObdStatus.connected) {
+      } else if (next.status == ObdStatus.connected &&
+          previous?.status != ObdStatus.connected) {
+        HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Terhubung ke ${next.connectedDeviceName ?? "OBD-II"}'),
+            content: Text(
+              'Terhubung ke ${next.connectedDeviceName ?? "OBD-II"}',
+            ),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -35,8 +50,8 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'PENGATURAN',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          'Pengaturan',
+          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
@@ -46,25 +61,54 @@ class SettingsScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // SIMULATOR MODE SECTION
-            _buildSectionHeader('Simulator Mode'),
+            // CONNECTION MODE SECTION
+            _buildSectionHeader('Mode Koneksi'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Column(
-                  children: [
-                    SwitchListTile(
-                      title: const Text('Aktifkan Simulator'),
-                      subtitle: const Text('Simulasi data mobil tanpa ELM327 asli'),
-                      value: settings.isSimulatorMode,
-                      activeColor: AppColors.primary,
-                      onChanged: (val) {
-                        ref.read(settingsProvider.notifier).setSimulatorMode(val);
-                        ref.read(obdServiceProvider.notifier).toggleSimulatorMode(val);
-                      },
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  secondary: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: settings.isSimulatorMode 
+                          ? AppColors.warning.withOpacity(0.15)
+                          : AppColors.primary.withOpacity(0.15),
+                      shape: BoxShape.circle,
                     ),
-                    if (settings.isSimulatorMode) ...[
-                      const Divider(color: AppColors.surface, height: 1),
+                    child: Icon(
+                      settings.isSimulatorMode ? Icons.science_rounded : Icons.bluetooth_connected_rounded,
+                      color: settings.isSimulatorMode ? AppColors.warning : AppColors.primary,
+                    ),
+                  ),
+                  title: Text(
+                    settings.isSimulatorMode ? 'Mode Simulator (Demo)' : 'Mode Bluetooth OBD-II',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    settings.isSimulatorMode 
+                        ? 'Sensor simulasi aktif (Uji coba tanpa adapter OBD).'
+                        : 'Terhubung ke scanner Bluetooth fisik mobil (Default).',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  value: settings.isSimulatorMode,
+                  activeColor: AppColors.warning,
+                  onChanged: (val) {
+                    ref.read(settingsProvider.notifier).setSimulatorMode(val);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // SIMULATOR CONTROLS SECTION (Only active in Simulator Mode)
+            if (settings.isSimulatorMode) ...[
+              _buildSectionHeader('Pengaturan Simulator Demo'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    children: [
                       SwitchListTile(
                         title: const Text('Kontak / Mesin Menyala'),
                         subtitle: const Text('Mengontrol RPM dan indikator hidup'),
@@ -72,38 +116,49 @@ class SettingsScreen extends ConsumerWidget {
                         activeColor: AppColors.primary,
                         onChanged: (val) {
                           ref.read(settingsProvider.notifier).setIgnitionOn(val);
-                          ref.read(obdServiceProvider.notifier).simulator.configure(isEngineRunning: val);
                         },
                       ),
                       const Divider(color: AppColors.surface, height: 1),
                       _buildSimulatorTriggerRow(
-                        ref, 
-                        'Simulasikan Overheat (Coolant)', 
+                        'Simulasikan Overheat (Coolant)',
                         'Menaikkan suhu coolant ke 109°C',
-                        (val) => ref.read(obdServiceProvider.notifier).simulator.configure(hasHighTemp: val),
-                      ),
-                      const Divider(color: AppColors.surface, height: 1),
-                      _buildSimulatorTriggerRow(
-                        ref, 
-                        'Simulasikan Aki Lemah', 
-                        'Menurunkan tegangan aki ke 11.4V',
-                        (val) => ref.read(obdServiceProvider.notifier).simulator.configure(hasLowVoltage: val),
-                      ),
-                      const Divider(color: AppColors.surface, height: 1),
-                      _buildSimulatorTriggerRow(
-                        ref, 
-                        'Simulasikan Check Engine (DTC)', 
-                        'Menyuntikkan kode eror P0138 (O2 Sensor)',
-                        (val) => ref.read(obdServiceProvider.notifier).simulator.configure(
-                          injectedDtcs: val ? ['P0138'] : [],
+                        ref.watch(
+                          obdServiceProvider.select((s) => s.simHighTemp),
                         ),
+                        (val) => ref
+                            .read(obdServiceProvider.notifier)
+                            .configureSimulator(hasHighTemp: val),
+                      ),
+                      const Divider(color: AppColors.surface, height: 1),
+                      _buildSimulatorTriggerRow(
+                        'Simulasikan Aki Lemah',
+                        'Menurunkan tegangan aki ke 11.4V',
+                        ref.watch(
+                          obdServiceProvider.select((s) => s.simLowVoltage),
+                        ),
+                        (val) => ref
+                            .read(obdServiceProvider.notifier)
+                            .configureSimulator(hasLowVoltage: val),
+                      ),
+                      const Divider(color: AppColors.surface, height: 1),
+                      _buildSimulatorTriggerRow(
+                        'Simulasikan Check Engine (DTC)',
+                        'Menyuntikkan kode eror P0138 (O2 Sensor)',
+                        ref.watch(
+                          obdServiceProvider.select((s) => s.simHasDtc),
+                        ),
+                        (val) => ref
+                            .read(obdServiceProvider.notifier)
+                            .configureSimulator(
+                              injectedDtcs: val ? ['P0138'] : [],
+                            ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
 
             // BLUETOOTH / REAL OBD CONNECTION SECTION
             if (!settings.isSimulatorMode) ...[
@@ -158,13 +213,13 @@ class SettingsScreen extends ConsumerWidget {
                       separatorBuilder: (context, index) => const Divider(color: AppColors.surface, height: 1),
                       itemBuilder: (context, index) {
                         final device = devices[index];
-                        final isConnected = obdState.connectedDeviceAddress == device.address && 
-                                             obdState.status == ObdStatus.connected;
-                        final isConnecting = obdState.connectedDeviceAddress == device.address && 
-                                             (obdState.status == ObdStatus.connecting || 
-                                              obdState.status == ObdStatus.initializing);
-                        final isAnyConnecting = obdState.status == ObdStatus.connecting || 
-                                                obdState.status == ObdStatus.initializing;
+                        final isConnected = connectedDeviceAddress == device.address && 
+                                             obdStatus == ObdStatus.connected;
+                        final isConnecting = connectedDeviceAddress == device.address && 
+                                             (obdStatus == ObdStatus.connecting || 
+                                              obdStatus == ObdStatus.initializing);
+                        final isAnyConnecting = obdStatus == ObdStatus.connecting || 
+                                                obdStatus == ObdStatus.initializing;
 
                         return ListTile(
                           leading: Icon(
@@ -222,15 +277,38 @@ class SettingsScreen extends ConsumerWidget {
                 child: Column(
                   children: [
                     _buildProfileEditRow(
-                      context, 
-                      'Nama Mobil', 
-                      settings.vehicleName, 
-                      (val) => ref.read(settingsProvider.notifier).updateVehicleName(val),
+                      context,
+                      'Nama Mobil',
+                      settings.vehicleName,
+                      (val) => ref
+                          .read(settingsProvider.notifier)
+                          .updateVehicleName(val),
                     ),
-                     const Divider(color: AppColors.surface, height: 1),
+                    if (settings.vehicleVin.isNotEmpty) ...[
+                      const Divider(color: AppColors.surface, height: 1),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'VIN (dari ECU)',
+                          style: TextStyle(fontSize: 14),
+                        ),
+                        subtitle: Text(
+                          settings.vehicleVin,
+                          style: AppTheme.numberStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const Divider(color: AppColors.surface, height: 1),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('Odometer Saat Ini', style: TextStyle(fontSize: 14)),
+                      title: const Text(
+                        'Odometer Saat Ini',
+                        style: TextStyle(fontSize: 14),
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -243,23 +321,78 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Icon(Icons.sync_rounded, color: AppColors.success, size: 16),
+                          const Icon(
+                            Icons.sync_rounded,
+                            color: AppColors.success,
+                            size: 16,
+                          ),
                         ],
                       ),
-                      subtitle: const Text('Sinkron otomatis dari OBD-II ECU', style: TextStyle(fontSize: 11, color: AppColors.success)),
+                      subtitle: const Text(
+                        'Dari ECU (PID 01A6) bila didukung, atau isi manual',
+                        style: TextStyle(fontSize: 11, color: AppColors.success),
+                      ),
+                      onTap: () => _showEditDialog(
+                        context,
+                        'Odometer Saat Ini',
+                        settings.currentOdometer.toStringAsFixed(0),
+                        (val) {
+                          final parsed = double.tryParse(val);
+                          if (parsed != null) {
+                            ref
+                                .read(settingsProvider.notifier)
+                                .updateOdometer(parsed);
+                          }
+                        },
+                        true,
+                      ),
                     ),
                     const Divider(color: AppColors.surface, height: 1),
                     _buildProfileEditRow(
-                      context, 
-                      'Target Ganti Oli', 
-                      '${settings.nextOilOdometer.toStringAsFixed(0)} km', 
+                      context,
+                      'Target Ganti Oli',
+                      '${settings.nextOilOdometer.toStringAsFixed(0)} km',
                       (val) {
                         final parsed = double.tryParse(val);
                         if (parsed != null) {
-                          ref.read(settingsProvider.notifier).updateNextOilOdometer(parsed);
+                          ref
+                              .read(settingsProvider.notifier)
+                              .updateNextOilOdometer(parsed);
                         }
                       },
                       isNumber: true,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _isSyncingVehicle
+                            ? null
+                            : () => _syncVehicleFromEcu(context),
+                        icon: _isSyncingVehicle
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.bluetooth_searching_rounded),
+                        label: Text(
+                          _isSyncingVehicle
+                              ? 'Membaca dari ECU...'
+                              : 'Ambil Nama & Odometer dari ECU',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Nama model diisi dari decode VIN (Mode 09). '
+                      'Odometer dari PID 01A6 — tidak semua mobil mendukung.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary.withOpacity(0.9),
+                      ),
                     ),
                   ],
                 ),
@@ -267,6 +400,36 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Syncs vehicle name/VIN/odometer without Navigator dialogs.
+  /// (Dialog + pop fights go_router shell and can blank the Settings tab.)
+  Future<void> _syncVehicleFromEcu(BuildContext context) async {
+    if (_isSyncingVehicle) return;
+    setState(() => _isSyncingVehicle = true);
+
+    EcuVehicleIdentityResult result;
+    try {
+      result =
+          await ref.read(settingsProvider.notifier).syncVehicleIdentityFromEcu();
+    } catch (e) {
+      result = EcuVehicleIdentityResult(
+        success: false,
+        message: 'Gagal membaca ECU: $e',
+      );
+    } finally {
+      if (mounted) setState(() => _isSyncingVehicle = false);
+    }
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor:
+            result.success ? AppColors.success : AppColors.danger,
       ),
     );
   }
@@ -281,8 +444,19 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSimulatorTriggerRow(WidgetRef ref, String title, String subtitle, Function(bool) onChanged) {
-    return _TriggerTile(title: title, subtitle: subtitle, onChanged: onChanged);
+  Widget _buildSimulatorTriggerRow(
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      activeColor: AppColors.danger,
+      onChanged: onChanged,
+    );
   }
 
   Widget _buildProfileEditRow(
@@ -350,42 +524,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ],
         );
-      },
-    );
-  }
-}
-
-// Stateful tile wrapper to maintain internal switch state for simulator triggers
-class _TriggerTile extends StatefulWidget {
-  final String title;
-  final String subtitle;
-  final Function(bool) onChanged;
-
-  const _TriggerTile({
-    required this.title,
-    required this.subtitle,
-    required this.onChanged,
-  });
-
-  @override
-  State<_TriggerTile> createState() => _TriggerTileState();
-}
-
-class _TriggerTileState extends State<_TriggerTile> {
-  bool _value = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      title: Text(widget.title),
-      subtitle: Text(widget.subtitle),
-      value: _value,
-      activeColor: AppColors.danger,
-      onChanged: (val) {
-        setState(() {
-          _value = val;
-        });
-        widget.onChanged(val);
       },
     );
   }

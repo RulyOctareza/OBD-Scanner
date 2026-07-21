@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
@@ -28,7 +29,7 @@ class Trips extends Table {
 
 class TripPoints extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get tripId => integer().references(Trips, #id, onDelete: KeyAction.cascade)();
+  IntColumn get tripId => integer().nullable().references(Trips, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get timestamp => dateTime()();
   RealColumn get rpm => real()();
   RealColumn get speed => real()();
@@ -37,6 +38,11 @@ class TripPoints extends Table {
   RealColumn get mapValue => real()();
   RealColumn get throttle => real().nullable()();
   RealColumn get engineLoad => real().nullable()();
+  RealColumn get fuel => real().nullable()();
+  RealColumn get fuelEconomy => real().nullable()();
+  RealColumn get intakeAirTemp => real().nullable()();
+  RealColumn get maf => real().nullable()();
+  RealColumn get timingAdvance => real().nullable()();
 }
 
 class FuelLogs extends Table {
@@ -82,7 +88,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.withExecutor(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -92,6 +98,13 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable(userPreferences);
+      }
+      if (from < 3) {
+        await m.addColumn(tripPoints, tripPoints.fuel);
+        await m.addColumn(tripPoints, tripPoints.fuelEconomy);
+        await m.addColumn(tripPoints, tripPoints.intakeAirTemp);
+        await m.addColumn(tripPoints, tripPoints.maf);
+        await m.addColumn(tripPoints, tripPoints.timingAdvance);
       }
     },
   );
@@ -114,7 +127,9 @@ class AppDatabase extends _$AppDatabase {
           value: Value(value),
         ),
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('UserPreferences write failed ($key): $e');
+    }
   }
 
   Future<double?> getDoublePreference(String key) async {

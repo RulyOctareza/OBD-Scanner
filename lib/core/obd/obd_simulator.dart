@@ -23,17 +23,33 @@ class ObdSimulator {
 
   Stream<ObdTelemetry> get telemetryStream => _controller.stream;
 
+  bool get isRunning => _timer != null;
+  bool get isEngineRunning => _isEngineRunning;
+  bool get hasHighTemp => _hasHighTemp;
+  bool get hasLowVoltage => _hasLowVoltage;
+  List<String> get injectedDtcs => List.unmodifiable(_injectedDtcs);
+
   void start({int intervalMs = 500}) {
     _timer?.cancel();
     _timer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) {
       _tick += 0.05;
       _updateSimulation();
     });
+    // Emit immediately so UI leaves "disconnected" without waiting a tick.
+    _updateSimulation();
   }
 
   void stop() {
     _timer?.cancel();
     _timer = null;
+  }
+
+  /// Clears demo triggers so switches / ECU state don't stay stuck after exit.
+  void resetDemoTriggers({bool engineRunning = true}) {
+    _isEngineRunning = engineRunning;
+    _hasHighTemp = false;
+    _hasLowVoltage = false;
+    _injectedDtcs = [];
   }
 
   void configure({
@@ -46,6 +62,7 @@ class ObdSimulator {
     if (hasHighTemp != null) _hasHighTemp = hasHighTemp;
     if (hasLowVoltage != null) _hasLowVoltage = hasLowVoltage;
     if (injectedDtcs != null) _injectedDtcs = injectedDtcs;
+    if (isRunning) _updateSimulation();
   }
 
   void clearDtcs() {

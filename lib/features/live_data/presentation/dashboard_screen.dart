@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
 import '../../../core/obd/obd_telemetry.dart';
+import '../../../core/widgets/obd_connection_sheet.dart';
 import 'widgets/gauge_widget.dart';
+import 'widgets/telemetry_chart_modal.dart';
 import '../../trips/presentation/trip_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
 
@@ -66,14 +68,30 @@ class DashboardScreen extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'PILIH INDIKATOR METER',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: AppColors.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Pilih Indikator Meter',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      TelemetryChartModal.show(context, currentSelection);
+                    },
+                    icon: const Icon(Icons.show_chart_rounded, size: 18, color: AppColors.primary),
+                    label: const Text(
+                      'Grafik',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Flexible(
@@ -147,9 +165,17 @@ class DashboardScreen extends ConsumerWidget {
     final obdState = ref.watch(obdServiceProvider);
     final telemetry = obdState.telemetry;
 
-    final settings = ref.watch(settingsProvider);
-    final leftMetricType = settings.leftMetric;
-    final rightMetricType = settings.rightMetric;
+    final settings = ref.watch(settingsProvider.select((s) => (
+          left: s.leftMetric,
+          right: s.rightMetric,
+          fullscreen: s.isFullscreenCockpit,
+          sm1: s.smallMetric1,
+          sm2: s.smallMetric2,
+          sm3: s.smallMetric3,
+          sm4: s.smallMetric4,
+        )));
+    final leftMetricType = settings.left;
+    final rightMetricType = settings.right;
 
     final leftConfig = ObdMetricConfig.all.firstWhere(
       (c) => c.type == leftMetricType,
@@ -158,7 +184,7 @@ class DashboardScreen extends ConsumerWidget {
       (c) => c.type == rightMetricType,
     );
 
-    final isFullscreen = settings.isFullscreenCockpit;
+    final isFullscreen = settings.fullscreen;
     final isPortrait =
         MediaQuery.of(context).orientation == Orientation.portrait &&
         !isFullscreen;
@@ -168,10 +194,10 @@ class DashboardScreen extends ConsumerWidget {
           ? null
           : AppBar(
               title: const Text(
-                'OBD2 COCKPIT METER',
+                'Meter Cockpit',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2.0,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
                 ),
               ),
               centerTitle: true,
@@ -180,7 +206,7 @@ class DashboardScreen extends ConsumerWidget {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.fullscreen_rounded),
-                  tooltip: 'Fullscreen Cockpit',
+                  tooltip: 'Layar Penuh',
                   onPressed: () {
                     ref
                         .read(settingsProvider.notifier)
@@ -194,267 +220,246 @@ class DashboardScreen extends ConsumerWidget {
           children: [
             obdState.status != ObdStatus.connected &&
                     obdState.status != ObdStatus.initializing
-                ? _buildNotConnected(obdState)
+                ? ObdNotConnectedView(
+                    state: obdState,
+                    onConnect: () => showObdConnectionSheet(context, ref),
+                  )
                 : Positioned.fill(
                     child: Padding(
                       padding: EdgeInsets.only(
-                        left: 16.0,
-                        right: 16.0,
+                        left: 12.0,
+                        right: 12.0,
                         top: isFullscreen ? 36.0 : 8.0,
                         bottom: 4.0,
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: constraints.maxHeight,
+                          final showTripHeader =
+                              obdState.status == ObdStatus.connected ||
+                              obdState.status == ObdStatus.initializing;
+
+                          Widget leftGauge({required bool compact}) {
+                            return GaugeWidget(
+                              value: _getValueForMetric(
+                                leftMetricType,
+                                telemetry,
                               ),
-                              child: Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  if (obdState.status == ObdStatus.connected ||
-                                      obdState.status ==
-                                          ObdStatus.initializing) ...[
-                                    _buildTripHeaderRow(
-                                      context,
-                                      ref,
-                                      telemetry,
-                                      isPortrait: isPortrait,
-                                    ),
-                                    const SizedBox(height: 12),
-                                  ],
+                              config: leftConfig,
+                              compact: compact,
+                              onTap: () => _showMetricSelector(
+                                context: context,
+                                ref: ref,
+                                spotIndex: 0,
+                                currentSelection: leftMetricType,
+                                telemetry: telemetry,
+                              ),
+                            );
+                          }
 
-                                  // 1. Main Gauges Section (Adaptive: Stacked Vertical in Portrait with compact mode, Side-by-side Row in Landscape)
-                                  if (isPortrait)
-                                    Column(
-                                      children: [
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 2,
-                                          ),
-                                          child: GaugeWidget(
-                                            value: _getValueForMetric(
-                                              leftMetricType,
-                                              telemetry,
-                                            ),
-                                            config: leftConfig,
-                                            compact: true,
-                                            onTap: () => _showMetricSelector(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 0,
-                                              currentSelection: leftMetricType,
-                                              telemetry: telemetry,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 2,
-                                          ),
-                                          child: GaugeWidget(
-                                            value: _getValueForMetric(
-                                              rightMetricType,
-                                              telemetry,
-                                            ),
-                                            config: rightConfig,
-                                            compact: true,
-                                            onTap: () => _showMetricSelector(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 1,
-                                              currentSelection: rightMetricType,
-                                              telemetry: telemetry,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  else
-                                    Expanded(
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                              child: GaugeWidget(
-                                                value: _getValueForMetric(
-                                                  leftMetricType,
-                                                  telemetry,
-                                                ),
-                                                config: leftConfig,
-                                                onTap: () =>
-                                                    _showMetricSelector(
-                                                      context: context,
-                                                      ref: ref,
-                                                      spotIndex: 0,
-                                                      currentSelection:
-                                                          leftMetricType,
-                                                      telemetry: telemetry,
-                                                    ),
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 4,
-                                                  ),
-                                              child: GaugeWidget(
-                                                value: _getValueForMetric(
-                                                  rightMetricType,
-                                                  telemetry,
-                                                ),
-                                                config: rightConfig,
-                                                onTap: () =>
-                                                    _showMetricSelector(
-                                                      context: context,
-                                                      ref: ref,
-                                                      spotIndex: 1,
-                                                      currentSelection:
-                                                          rightMetricType,
-                                                      telemetry: telemetry,
-                                                    ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                          Widget rightGauge({required bool compact}) {
+                            return GaugeWidget(
+                              value: _getValueForMetric(
+                                rightMetricType,
+                                telemetry,
+                              ),
+                              config: rightConfig,
+                              compact: compact,
+                              onTap: () => _showMetricSelector(
+                                context: context,
+                                ref: ref,
+                                spotIndex: 1,
+                                currentSelection: rightMetricType,
+                                telemetry: telemetry,
+                              ),
+                            );
+                          }
 
-                                  const SizedBox(height: 14),
+                          Widget flexibleGauge(Widget gauge) {
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: constraints.maxWidth,
+                                    child: gauge,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
 
-                                  // 2. Small Stats Row / Grid (Adaptive: 2x2 Grid in Portrait, 1 Row in Landscape)
-                                  if (isPortrait)
-                                    Column(
-                                      children: [
-                                        Row(
+                          final statsGrid = isPortrait
+                              ? SizedBox(
+                                  height: 100,
+                                  child: Column(
+                                    children: [
+                                      Expanded(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
                                           children: [
                                             if (!_isMetricUnsupported(
-                                              settings.smallMetric1,
+                                              settings.sm1,
                                               obdState,
                                             ))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 2,
-                                                metricType:
-                                                    settings.smallMetric1,
+                                                metricType: settings.sm1,
                                                 telemetry: telemetry,
                                               ),
                                             if (!_isMetricUnsupported(
-                                              settings.smallMetric2,
+                                              settings.sm2,
                                               obdState,
                                             ))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 3,
-                                                metricType:
-                                                    settings.smallMetric2,
+                                                metricType: settings.sm2,
                                                 telemetry: telemetry,
                                               ),
                                           ],
                                         ),
-                                        const SizedBox(height: 8),
-                                        Row(
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Expanded(
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
                                           children: [
                                             if (!_isMetricUnsupported(
-                                              settings.smallMetric3,
+                                              settings.sm3,
                                               obdState,
                                             ))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 4,
-                                                metricType:
-                                                    settings.smallMetric3,
+                                                metricType: settings.sm3,
                                                 telemetry: telemetry,
                                               ),
                                             if (!_isMetricUnsupported(
-                                              settings.smallMetric4,
+                                              settings.sm4,
                                               obdState,
                                             ))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 5,
-                                                metricType:
-                                                    settings.smallMetric4,
+                                                metricType: settings.sm4,
                                                 telemetry: telemetry,
                                               ),
                                           ],
                                         ),
-                                      ],
-                                    )
-                                  else
-                                    SizedBox(
-                                      height: 52,
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          if (!_isMetricUnsupported(
-                                            settings.smallMetric1,
-                                            obdState,
-                                          ))
-                                            _buildInteractiveSmallStatCard(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 2,
-                                              metricType: settings.smallMetric1,
-                                              telemetry: telemetry,
-                                            ),
-                                          if (!_isMetricUnsupported(
-                                            settings.smallMetric2,
-                                            obdState,
-                                          ))
-                                            _buildInteractiveSmallStatCard(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 3,
-                                              metricType: settings.smallMetric2,
-                                              telemetry: telemetry,
-                                            ),
-                                          if (!_isMetricUnsupported(
-                                            settings.smallMetric3,
-                                            obdState,
-                                          ))
-                                            _buildInteractiveSmallStatCard(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 4,
-                                              metricType: settings.smallMetric3,
-                                              telemetry: telemetry,
-                                            ),
-                                          if (!_isMetricUnsupported(
-                                            settings.smallMetric4,
-                                            obdState,
-                                          ))
-                                            _buildInteractiveSmallStatCard(
-                                              context: context,
-                                              ref: ref,
-                                              spotIndex: 5,
-                                              metricType: settings.smallMetric4,
-                                              telemetry: telemetry,
-                                            ),
-                                        ],
                                       ),
-                                    ),
-                                ],
-                              ),
-                            ),
+                                    ],
+                                  ),
+                                )
+                              : SizedBox(
+                                  height: 52,
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    children: [
+                                      if (!_isMetricUnsupported(
+                                        settings.sm1,
+                                        obdState,
+                                      ))
+                                        _buildInteractiveSmallStatCard(
+                                          context: context,
+                                          ref: ref,
+                                          spotIndex: 2,
+                                          metricType: settings.sm1,
+                                          telemetry: telemetry,
+                                        ),
+                                      if (!_isMetricUnsupported(
+                                        settings.sm2,
+                                        obdState,
+                                      ))
+                                        _buildInteractiveSmallStatCard(
+                                          context: context,
+                                          ref: ref,
+                                          spotIndex: 3,
+                                          metricType: settings.sm2,
+                                          telemetry: telemetry,
+                                        ),
+                                      if (!_isMetricUnsupported(
+                                        settings.sm3,
+                                        obdState,
+                                      ))
+                                        _buildInteractiveSmallStatCard(
+                                          context: context,
+                                          ref: ref,
+                                          spotIndex: 4,
+                                          metricType: settings.sm3,
+                                          telemetry: telemetry,
+                                        ),
+                                      if (!_isMetricUnsupported(
+                                        settings.sm4,
+                                        obdState,
+                                      ))
+                                        _buildInteractiveSmallStatCard(
+                                          context: context,
+                                          ref: ref,
+                                          spotIndex: 5,
+                                          metricType: settings.sm4,
+                                          telemetry: telemetry,
+                                        ),
+                                    ],
+                                  ),
+                                );
+
+                          // Fit gauges + 4 indicators on one screen (no scroll).
+                          return Column(
+                            children: [
+                              if (showTripHeader) ...[
+                                _buildTripHeaderRow(
+                                  context,
+                                  ref,
+                                  telemetry,
+                                  isPortrait: isPortrait,
+                                ),
+                                SizedBox(height: isPortrait ? 6 : 8),
+                              ],
+                              if (isPortrait) ...[
+                                flexibleGauge(leftGauge(compact: true)),
+                                const SizedBox(height: 4),
+                                flexibleGauge(rightGauge(compact: true)),
+                              ] else
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceEvenly,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
+                                          child: leftGauge(compact: false),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                          ),
+                                          child: rightGauge(compact: false),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              SizedBox(height: isPortrait ? 8 : 10),
+                              statsGrid,
+                            ],
                           );
                         },
                       ),
@@ -561,7 +566,7 @@ class DashboardScreen extends ConsumerWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.black45,
           borderRadius: BorderRadius.circular(12),
@@ -604,7 +609,7 @@ class DashboardScreen extends ConsumerWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
         decoration: BoxDecoration(
           color: Colors.black45,
           borderRadius: BorderRadius.circular(12),
@@ -638,13 +643,14 @@ class DashboardScreen extends ConsumerWidget {
 
     if (isPortrait) {
       return Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Center(child: ecoBadge),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(
             children: [
               Expanded(child: tripARecord),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(child: tripBRecord),
             ],
           ),
@@ -706,7 +712,8 @@ class DashboardScreen extends ConsumerWidget {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => _showMetricSelector(
+        onTap: () => TelemetryChartModal.show(context, metricType),
+        onLongPress: () => _showMetricSelector(
           context: context,
           ref: ref,
           spotIndex: spotIndex,
@@ -760,13 +767,15 @@ class DashboardScreen extends ConsumerWidget {
   }) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+      alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
         color: AppColors.surface.withOpacity(0.6),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.white10, width: 1),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, color: color, size: 16),
           const SizedBox(width: 6),
@@ -774,11 +783,13 @@ class DashboardScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   label,
                   style: const TextStyle(
                     fontSize: 7.5,
+                    height: 1.1,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.8,
                     color: AppColors.textSecondary,
@@ -786,11 +797,12 @@ class DashboardScreen extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 12,
+                    height: 1.1,
                     fontWeight: FontWeight.w900,
                     color: AppColors.textPrimary,
                     fontFamily: 'monospace',
@@ -802,44 +814,6 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildNotConnected(ObdState state) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.dashboard_customize_outlined,
-              size: 64,
-              color: Colors.white24,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Mesin Belum Terhubung',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              state.status == ObdStatus.connecting
-                  ? 'Menghubungkan ke ELM327...'
-                  : 'Aktifkan Bluetooth mobil atau masuk ke menu Settings untuk mengaktifkan Simulator.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

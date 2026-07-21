@@ -43,6 +43,7 @@ enum TypeFilter { all, trip, fuel, maintenance }
 
 final selectedDateFilterProvider = StateProvider<DateFilter>((ref) => DateFilter.all);
 final selectedTypeFilterProvider = StateProvider<TypeFilter>((ref) => TypeFilter.all);
+final timelineFocusTripIdProvider = StateProvider<int?>((ref) => null);
 
 final fuelLogsProvider = StreamProvider<List<FuelLog>>((ref) {
   final db = ref.watch(databaseProvider);
@@ -187,81 +188,108 @@ class TimelineScreen extends ConsumerWidget {
       }
     });
 
+    final isSimulatorMode = ref.watch(
+      settingsProvider.select((s) => s.isSimulatorMode),
+    );
+    final focusTripId = ref.watch(timelineFocusTripIdProvider);
     final avgFuelEconomy = tripCountWithEconomy > 0 ? totalFuelEconomySum / tripCountWithEconomy : 0.0;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'LINIMASA KENDARAAN',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          'Linimasa Kendaraan',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_sweep_rounded, color: AppColors.danger),
-            tooltip: 'Hapus Semua Riwayat',
-            onPressed: () => _clearAllHistory(context, ref),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (value) {
+              if (value == 'clear_all') {
+                _clearAllHistory(context, ref);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'clear_all',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_sweep_rounded, color: AppColors.danger, size: 20),
+                    SizedBox(width: 8),
+                    Text('Hapus Semua Riwayat', style: TextStyle(color: AppColors.danger, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddActionSheet(context, ref),
+        backgroundColor: AppColors.primary,
+        elevation: 4,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: const Text(
+          'Catat Aktivitas',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // Ringkasan Dashboard Dinamis
-            _buildStatsDashboard(context, totalDistance, totalCost, avgFuelEconomy),
-
-            // Panel Filter (Waktu & Kategori)
-            _buildDateFilterRow(context, ref, dateFilter),
-            _buildTypeFilterRow(context, ref, typeFilter),
-            
-            const SizedBox(height: 8),
-
-            // Action Buttons Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: AppColors.primary),
+            if (isSimulatorMode)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.science_rounded, size: 16, color: AppColors.warning),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Mode Simulasi Aktif — Perjalanan simulasi tidak dicatat ke linimasa.',
+                        style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w500),
                       ),
-                      icon: const Icon(Icons.local_gas_station_rounded, color: AppColors.primary),
-                      label: const Text('Isi BBM', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      onPressed: () => _showAddFuelDialog(context, ref),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: const BorderSide(color: AppColors.primary),
-                      ),
-                      icon: const Icon(Icons.build_rounded, color: AppColors.primary),
-                      label: const Text('Servis', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                      onPressed: () => _showAddMaintDialog(context, ref),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+
+            // Ringkasan Dashboard Dinamis
+            _buildStatsDashboard(
+              context,
+              totalDistance,
+              totalCost,
+              avgFuelEconomy,
+              dateFilter: dateFilter,
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 4),
+
+            // Combined Filter Bar (Date Dropdown & Type Pills)
+            _buildFilterSection(context, ref, dateFilter, typeFilter),
+            
+            const SizedBox(height: 6),
             
             // Timeline list
             Expanded(
               child: eventsAsync.when(
                 data: (events) {
                   if (events.isEmpty) {
-                    return _buildEmptyState();
+                    return _buildEmptyState(context, ref);
                   }
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
                     itemCount: events.length,
                     itemBuilder: (context, index) {
                       final event = events[index];
@@ -306,7 +334,14 @@ class TimelineScreen extends ConsumerWidget {
                             );
                           }
                         },
-                        child: _buildTimelineItem(context, event, index == events.length - 1),
+                        child: _buildTimelineItem(
+                          context,
+                          event,
+                          index == events.length - 1,
+                          highlighted: focusTripId != null &&
+                              event.type == TimelineEventType.trip &&
+                              event.id == focusTripId,
+                        ),
                       );
                     },
                   );
@@ -321,31 +356,70 @@ class TimelineScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatsDashboard(BuildContext context, double distance, double cost, double economy) {
+  Widget _buildStatsDashboard(
+    BuildContext context,
+    double distance,
+    double cost,
+    double economy, {
+    required DateFilter dateFilter,
+  }) {
     final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+    final periodLabel = switch (dateFilter) {
+      DateFilter.today => 'hari ini',
+      DateFilter.thisWeek => 'minggu ini',
+      DateFilter.thisMonth => 'bulan ini',
+      DateFilter.thisYear => 'tahun ini',
+      DateFilter.all => 'seluruh periode',
+    };
+    final insight = distance > 0
+        ? 'Ringkasan $periodLabel: ${distance.toStringAsFixed(1)} km'
+            '${economy > 0 ? ', rata-rata ${economy.toStringAsFixed(1)} km/L' : ''}.'
+        : 'Belum ada perjalanan tercatat untuk $periodLabel.';
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.primary.withOpacity(0.12),
-            AppColors.success.withOpacity(0.04),
+            AppColors.card.withOpacity(0.9),
+            AppColors.surface.withOpacity(0.8),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          _buildStatColumn('Jarak Tempuh', '${distance.toStringAsFixed(1)} km', Icons.directions_car_rounded, AppColors.primary),
-          _buildStatDivider(),
-          _buildStatColumn('Pengeluaran', currencyFormat.format(cost), Icons.payments_rounded, AppColors.success),
-          _buildStatDivider(),
-          _buildStatColumn('Konsumsi BBM', '${economy.toStringAsFixed(1)} km/L', Icons.local_gas_station_rounded, AppColors.warning),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildStatColumn('Jarak Tempuh', '${distance.toStringAsFixed(1)} km', Icons.directions_car_rounded, AppColors.primary),
+              _buildStatDivider(),
+              _buildStatColumn('Pengeluaran', currencyFormat.format(cost), Icons.payments_rounded, AppColors.success),
+              _buildStatDivider(),
+              _buildStatColumn('Konsumsi BBM', '${economy.toStringAsFixed(1)} km/L', Icons.local_gas_station_rounded, AppColors.warning),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            insight,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              height: 1.3,
+            ),
+          ),
         ],
       ),
     );
@@ -355,7 +429,7 @@ class TimelineScreen extends ConsumerWidget {
     return Container(
       width: 1,
       height: 36,
-      color: Colors.white.withOpacity(0.1),
+      color: Colors.white.withOpacity(0.08),
     );
   }
 
@@ -364,7 +438,14 @@ class TimelineScreen extends ConsumerWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color.withOpacity(0.8), size: 20),
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
           const SizedBox(height: 6),
           Text(
             value,
@@ -376,7 +457,7 @@ class TimelineScreen extends ConsumerWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+            style: const TextStyle(fontSize: 10, color: Color(0xFF9EA7B8), fontWeight: FontWeight.w500),
             textAlign: TextAlign.center,
           ),
         ],
@@ -384,120 +465,280 @@ class TimelineScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDateFilterRow(BuildContext context, WidgetRef ref, DateFilter activeFilter) {
-    final filters = {
-      DateFilter.all: 'Semua',
+  Widget _buildFilterSection(BuildContext context, WidgetRef ref, DateFilter activeDate, TypeFilter activeType) {
+    final dateFilters = {
+      DateFilter.all: 'Semua Waktu',
       DateFilter.today: 'Hari Ini',
       DateFilter.thisWeek: 'Minggu Ini',
       DateFilter.thisMonth: 'Bulan Ini',
       DateFilter.thisYear: 'Tahun Ini',
     };
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: filters.entries.map((entry) {
-          final isSelected = entry.key == activeFilter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ChoiceChip(
-              label: Text(
-                entry.value,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
-                ),
-              ),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  ref.read(selectedDateFilterProvider.notifier).state = entry.key;
-                }
-              },
-              selectedColor: AppColors.primary.withOpacity(0.8),
-              backgroundColor: AppColors.card,
-              checkmarkColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.05),
-                  width: 1,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTypeFilterRow(BuildContext context, WidgetRef ref, TypeFilter activeFilter) {
-    final filters = {
-      TypeFilter.all: 'Semua Kategori',
+    final typeFilters = {
+      TypeFilter.all: 'Semua',
       TypeFilter.trip: 'Perjalanan',
-      TypeFilter.fuel: 'Bahan Bakar',
+      TypeFilter.fuel: 'BBM',
       TypeFilter.maintenance: 'Servis',
     };
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        children: filters.entries.map((entry) {
-          final isSelected = entry.key == activeFilter;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ChoiceChip(
-              label: Text(
-                entry.value,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
+        children: [
+          // Time filter dropdown button
+          PopupMenuButton<DateFilter>(
+            initialValue: activeDate,
+            onSelected: (val) {
+              ref.read(selectedDateFilterProvider.notifier).state = val;
+            },
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: activeDate != DateFilter.all
+                    ? AppColors.primary.withOpacity(0.2)
+                    : Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: activeDate != DateFilter.all ? AppColors.primary : Colors.white.withOpacity(0.1),
                 ),
               ),
-              selected: isSelected,
-              onSelected: (selected) {
-                if (selected) {
-                  ref.read(selectedTypeFilterProvider.notifier).state = entry.key;
-                }
-              },
-              selectedColor: AppColors.primary.withOpacity(0.8),
-              backgroundColor: AppColors.card,
-              checkmarkColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.05),
-                  width: 1,
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today_rounded,
+                    size: 13,
+                    color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    dateFilters[activeDate] ?? 'Waktu',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: activeDate != DateFilter.all ? FontWeight.bold : FontWeight.w500,
+                      color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                  ),
+                ],
               ),
             ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.timeline_rounded, size: 48, color: Colors.grey.withOpacity(0.3)),
-          const SizedBox(height: 12),
-          const Text(
-            'Belum ada riwayat aktivitas',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+            itemBuilder: (context) => dateFilters.entries.map((entry) {
+              return PopupMenuItem(
+                value: entry.key,
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    color: entry.key == activeDate ? AppColors.primary : AppColors.textPrimary,
+                    fontWeight: entry.key == activeDate ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                ),
+              );
+            }).toList(),
           ),
+          const SizedBox(width: 8),
+          Container(width: 1, height: 20, color: Colors.white.withOpacity(0.1)),
+          const SizedBox(width: 8),
+
+          // Category Pills
+          ...typeFilters.entries.map((entry) {
+            final isSelected = entry.key == activeType;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6.0),
+              child: InkWell(
+                onTap: () {
+                  ref.read(selectedTypeFilterProvider.notifier).state = entry.key;
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFFA0AEC0),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildTimelineItem(BuildContext context, TimelineEvent event, bool isLast) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1.5),
+              ),
+              child: Icon(Icons.history_toggle_off_rounded, size: 52, color: AppColors.primary.withOpacity(0.85)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Belum Ada Riwayat Aktivitas',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Catat pengisian BBM atau servis kendaraan Anda untuk memantau pengeluaran dan efisiensi konsumsi bahan bakar.',
+              style: TextStyle(color: Color(0xFF9EA7B8), fontSize: 12, height: 1.4),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary.withOpacity(0.15),
+                    foregroundColor: AppColors.primary,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  icon: const Icon(Icons.local_gas_station_rounded, size: 18),
+                  label: const Text('Catat BBM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  onPressed: () => _showAddFuelDialog(context, ref),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.warning.withOpacity(0.15),
+                    foregroundColor: AppColors.warning,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  icon: const Icon(Icons.build_rounded, size: 18),
+                  label: const Text('Catat Servis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  onPressed: () => _showAddMaintDialog(context, ref),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddActionSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Tambah Catatan Kendaraan',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  tileColor: AppColors.card,
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.local_gas_station_rounded, color: AppColors.primary),
+                  ),
+                  title: const Text('Isi Bahan Bakar (BBM)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Catat volume, harga, dan odometer pengisian', style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8))),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showAddFuelDialog(context, ref);
+                  },
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  tileColor: AppColors.card,
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.build_rounded, color: AppColors.warning),
+                  ),
+                  title: const Text('Servis / Perawatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Catat ganti oli, perbaikan, atau biaya perawatan', style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8))),
+                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showAddMaintDialog(context, ref);
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTimelineItem(
+    BuildContext context,
+    TimelineEvent event,
+    bool isLast, {
+    bool highlighted = false,
+  }) {
     IconData icon;
     Color iconBg;
     Color iconColor;
@@ -561,11 +802,14 @@ class TimelineScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: Card(
                 margin: EdgeInsets.zero,
+                color: highlighted ? AppColors.primary.withOpacity(0.08) : null,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: Colors.white.withOpacity(0.04),
-                    width: 1,
+                    color: highlighted
+                        ? AppColors.primary.withOpacity(0.55)
+                        : Colors.white.withOpacity(0.04),
+                    width: highlighted ? 1.5 : 1,
                   ),
                 ),
                 child: Padding(

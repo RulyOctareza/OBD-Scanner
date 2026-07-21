@@ -103,6 +103,14 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     _initTrips();
     // Listen to OBD State changes
     _ref.listen(obdServiceProvider, (previous, next) {
+      final isSimulatorMode = next.isSimulatorMode || _ref.read(settingsProvider).isSimulatorMode;
+      if (isSimulatorMode) {
+        if (state.isRecording) {
+          _cancelTripWithoutSaving();
+        }
+        return;
+      }
+
       final isEngineOn = next.telemetry.rpm > 500;
       final isVehicleMoving = next.telemetry.speed > 0.0 || next.telemetry.rpm >= 1100;
       final isConnected = next.status == ObdStatus.connected;
@@ -117,6 +125,25 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
         _updateTripData(next.telemetry);
       }
     });
+  }
+
+  Future<void> _cancelTripWithoutSaving() async {
+    _tripTimer?.cancel();
+    _tripTimer = null;
+
+    if (_activeTripId != -1) {
+      final db = _ref.read(databaseProvider);
+      final idToDelete = _activeTripId;
+      _activeTripId = -1;
+      try {
+        await (db.delete(db.trips)..where((t) => t.id.equals(idToDelete))).go();
+        await (db.delete(db.tripPoints)..where((tp) => tp.tripId.equals(idToDelete))).go();
+      } catch (_) {}
+    }
+
+    state = state.copyWith(
+      isRecording: false,
+    );
   }
 
   Future<void> _initTrips() async {
@@ -301,13 +328,13 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
       tripBDistance: newTripB,
     );
 
-    // Save trip point to DB for plotting charts (throttled to 1Hz)
-    if (_lastDbSaveTime == null || now.difference(_lastDbSaveTime!).inMilliseconds >= 1000) {
+    // Save trip point more frequently for better chart history (5s)
+    if (_lastDbSaveTime == null || now.difference(_lastDbSaveTime!).inSeconds >= 5) {
       _lastDbSaveTime = now;
       final db = _ref.read(databaseProvider);
       db.into(db.tripPoints).insert(
         TripPointsCompanion.insert(
-          tripId: _activeTripId,
+          tripId: Value(_activeTripId),
           timestamp: now,
           rpm: rpm,
           speed: speed,
@@ -316,6 +343,11 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
           mapValue: telemetry.mapValue,
           throttle: Value(telemetry.throttle),
           engineLoad: Value(telemetry.engineLoad),
+          fuel: Value(telemetry.fuelLevel),
+          fuelEconomy: Value(telemetry.fuelEconomy),
+          intakeAirTemp: Value(telemetry.intakeAirTemp),
+          maf: Value(telemetry.maf),
+          timingAdvance: Value(telemetry.timingAdvance),
         ),
       );
     }

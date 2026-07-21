@@ -4,13 +4,23 @@ import '../../settings/presentation/settings_provider.dart';
 import '../../../core/bluetooth/obd_service.dart';
 
 final healthProvider = Provider<HealthReport>((ref) {
-  final obdState = ref.watch(obdServiceProvider);
-  final settings = ref.watch(settingsProvider);
-  
+  final telemetry = ref.watch(
+    obdServiceProvider.select((s) => s.telemetry),
+  );
+  final nextOilOdometer = ref.watch(
+    settingsProvider.select((s) => s.nextOilOdometer),
+  );
+  final currentOdometer = ref.watch(
+    settingsProvider.select((s) => s.currentOdometer),
+  );
+  final vehicleName = ref.watch(
+    settingsProvider.select((s) => s.vehicleName),
+  );
+
   return HealthEngine.calculate(
-    obdState.telemetry,
-    nextOilOdometer: settings.nextOilOdometer,
-    currentOdometer: settings.currentOdometer,
-    vehicleName: settings.vehicleName,
+    telemetry,
+    nextOilOdometer: nextOilOdometer,
+    currentOdometer: currentOdometer,
+    vehicleName: vehicleName,
   );
 });

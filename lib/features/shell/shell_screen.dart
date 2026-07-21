@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../settings/presentation/settings_provider.dart';
+import '../live_data/presentation/live_chart_buffer.dart';
 
 class ShellScreen extends ConsumerStatefulWidget {
   final StatefulNavigationShell navigationShell;
@@ -59,6 +60,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep live chart sampler warm while any tab is open.
+    ref.watch(liveChartBufferProvider);
+
     final isFullscreen = ref.watch(settingsProvider.select((s) => s.isFullscreenCockpit)) &&
         widget.navigationShell.currentIndex == 1;
 
@@ -129,12 +133,12 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                           BottomNavigationBarItem(
                             icon: Icon(Icons.speed_rounded),
                             activeIcon: Icon(Icons.speed_rounded, color: AppColors.primary),
-                            label: 'Dashboard',
+                            label: 'Meter',
                           ),
                           BottomNavigationBarItem(
                             icon: Icon(Icons.analytics_rounded),
                             activeIcon: Icon(Icons.analytics_rounded, color: AppColors.primary),
-                            label: 'Data',
+                            label: 'Sensor',
                           ),
                           BottomNavigationBarItem(
                             icon: Icon(Icons.history_rounded),
