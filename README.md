@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/preview/hero.png" alt="AutoCare — ilustrasi aplikasi diagnostik OBD-II" width="100%">
+  <img src="docs/preview/hero.svg" alt="AutoCare — ilustrasi aplikasi diagnostik OBD-II" width="100%">
 </p>
 
 <h1 align="center">AutoCare — OBD Scanner</h1>
