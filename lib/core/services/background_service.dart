@@ -1,16 +1,26 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+bool get _isFlutterTest =>
+    Platform.environment.containsKey('FLUTTER_TEST');
+
+/// Configures the Android foreground service used to keep the OBD session
+/// alive while a drive is active. Does **not** auto-start — call
+/// [startBackgroundMonitoring] only when connected.
 Future<void> initializeService() async {
+  if (_isFlutterTest) return;
+
   final service = FlutterBackgroundService();
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'autocare_foreground',
     'AutoCare Background Service',
-    description: 'This channel is used for important notifications.',
+    description: 'Keeps OBD monitoring alive while connected.',
     importance: Importance.low,
   );
 
@@ -25,19 +35,48 @@ Future<void> initializeService() async {
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
-      autoStart: true,
+      autoStart: false,
       isForegroundMode: true,
       notificationChannelId: 'autocare_foreground',
       initialNotificationTitle: 'AutoCare',
-      initialNotificationContent: 'Monitoring vehicle data',
+      initialNotificationContent: 'Connected to vehicle',
       foregroundServiceNotificationId: 888,
+      foregroundServiceTypes: [AndroidForegroundType.connectedDevice],
     ),
     iosConfiguration: IosConfiguration(
-      autoStart: true,
+      autoStart: false,
       onForeground: onStart,
       onBackground: onIosBackground,
     ),
   );
+}
+
+/// Starts the foreground service when an OBD session is active.
+Future<void> startBackgroundMonitoring() async {
+  if (_isFlutterTest || kIsWeb) return;
+  try {
+    final service = FlutterBackgroundService();
+    final running = await service.isRunning();
+    if (!running) {
+      await service.startService();
+    }
+  } catch (e) {
+    debugPrint('Failed to start background service: $e');
+  }
+}
+
+/// Stops the foreground service when disconnected / idle.
+Future<void> stopBackgroundMonitoring() async {
+  if (_isFlutterTest || kIsWeb) return;
+  try {
+    final service = FlutterBackgroundService();
+    final running = await service.isRunning();
+    if (running) {
+      service.invoke('stopService');
+    }
+  } catch (e) {
+    debugPrint('Failed to stop background service: $e');
+  }
 }
 
 @pragma('vm:entry-point')
@@ -65,19 +104,15 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  // Keep the service alive to prevent Android from killing the app.
-  Timer.periodic(const Duration(seconds: 10), (timer) async {
+  // Low-frequency keep-alive; avoid 10s notification churn.
+  Timer.periodic(const Duration(seconds: 60), (timer) async {
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
         service.setForegroundNotificationInfo(
-          title: "AutoCare",
-          content: "Monitoring vehicle data in background",
+          title: 'AutoCare',
+          content: 'Monitoring vehicle data',
         );
       }
     }
-
-    service.invoke('update', {
-      "current_date": DateTime.now().toIso8601String(),
-    });
   });
 }

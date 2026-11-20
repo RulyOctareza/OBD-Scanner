@@ -8,16 +8,16 @@ import 'widgets/gauge_widget.dart';
 /// Independent from trip DB writes (which are throttled to ~30s).
 class LiveChartBuffer extends StateNotifier<List<TelemetryPointBundle>> {
   LiveChartBuffer(this._ref) : super(const []) {
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+    // 1 Hz is enough for charts and halves CPU/GC vs 500ms.
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _sample();
     });
-    // Capture immediately on create
     _sample();
   }
 
   final Ref _ref;
   Timer? _timer;
-  static const int _maxSamples = 7200; // ~1 hour at 0.5s
+  static const int _maxSamples = 3600; // ~1 hour at 1s
 
   void _sample() {
     final obd = _ref.read(obdServiceProvider);
@@ -121,8 +121,8 @@ class TelemetryPointBundle {
 }
 
 final liveChartBufferProvider =
-    StateNotifierProvider<LiveChartBuffer, List<TelemetryPointBundle>>((ref) {
-  // Keep sampling while app shell is alive so charts have history on open.
-  ref.keepAlive();
+    StateNotifierProvider.autoDispose<LiveChartBuffer,
+        List<TelemetryPointBundle>>((ref) {
+  // Disposes when no screen is watching — avoids forever 1Hz sampling.
   return LiveChartBuffer(ref);
 });

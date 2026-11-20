@@ -1,4 +1,5 @@
 /// Pure helpers for gauge animation throttling and chart downsampling.
+library;
 
 /// Returns true when the gauge needle should animate to [next].
 bool shouldAnimateGaugeValue({

@@ -39,24 +39,31 @@ class TimelineEvent {
 }
 
 enum DateFilter { all, today, thisWeek, thisMonth, thisYear }
+
 enum TypeFilter { all, trip, fuel, maintenance }
 
-final selectedDateFilterProvider = StateProvider<DateFilter>((ref) => DateFilter.all);
-final selectedTypeFilterProvider = StateProvider<TypeFilter>((ref) => TypeFilter.all);
+final selectedDateFilterProvider = StateProvider<DateFilter>(
+  (ref) => DateFilter.all,
+);
+final selectedTypeFilterProvider = StateProvider<TypeFilter>(
+  (ref) => TypeFilter.all,
+);
 final timelineFocusTripIdProvider = StateProvider<int?>((ref) => null);
 
 final fuelLogsProvider = StreamProvider<List<FuelLog>>((ref) {
   final db = ref.watch(databaseProvider);
-  return (db.select(db.fuelLogs)
-    ..orderBy([(f) => OrderingTerm(expression: f.timestamp, mode: OrderingMode.desc)]))
-    .watch();
+  return (db.select(db.fuelLogs)..orderBy([
+        (f) => OrderingTerm(expression: f.timestamp, mode: OrderingMode.desc),
+      ]))
+      .watch();
 });
 
 final maintenanceLogsProvider = StreamProvider<List<MaintenanceLog>>((ref) {
   final db = ref.watch(databaseProvider);
-  return (db.select(db.maintenanceLogs)
-    ..orderBy([(m) => OrderingTerm(expression: m.timestamp, mode: OrderingMode.desc)]))
-    .watch();
+  return (db.select(db.maintenanceLogs)..orderBy([
+        (m) => OrderingTerm(expression: m.timestamp, mode: OrderingMode.desc),
+      ]))
+      .watch();
 });
 
 final timelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
@@ -67,9 +74,12 @@ final timelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
   if (tripsAsync.isLoading || fuelAsync.isLoading || maintAsync.isLoading) {
     return const AsyncValue.loading();
   }
-  if (tripsAsync.hasError) return AsyncValue.error(tripsAsync.error!, tripsAsync.stackTrace!);
-  if (fuelAsync.hasError) return AsyncValue.error(fuelAsync.error!, fuelAsync.stackTrace!);
-  if (maintAsync.hasError) return AsyncValue.error(maintAsync.error!, maintAsync.stackTrace!);
+  if (tripsAsync.hasError)
+    return AsyncValue.error(tripsAsync.error!, tripsAsync.stackTrace!);
+  if (fuelAsync.hasError)
+    return AsyncValue.error(fuelAsync.error!, fuelAsync.stackTrace!);
+  if (maintAsync.hasError)
+    return AsyncValue.error(maintAsync.error!, maintAsync.stackTrace!);
 
   final trips = tripsAsync.value ?? [];
   final fuels = fuelAsync.value ?? [];
@@ -77,87 +87,117 @@ final timelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
 
   final events = <TimelineEvent>[];
 
-  final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+  final currencyFormat = NumberFormat.currency(
+    locale: 'id_ID',
+    symbol: 'Rp',
+    decimalDigits: 0,
+  );
 
   for (final trip in trips) {
-    events.add(TimelineEvent(
-      id: trip.id,
-      timestamp: trip.startTime,
-      type: TimelineEventType.trip,
-      title: "Perjalanan Selesai",
-      description: "${trip.durationMinutes} menit • ${trip.avgSpeed.toStringAsFixed(0)} km/h • Max Coolant ${trip.maxCoolant}°C",
-      value: "${trip.distance.toStringAsFixed(1)} km",
-      subValue: "${trip.fuelEconomy.toStringAsFixed(1)} km/L",
-      rawDistance: trip.distance,
-      rawFuelEconomy: trip.fuelEconomy,
-    ));
+    events.add(
+      TimelineEvent(
+        id: trip.id,
+        timestamp: trip.startTime,
+        type: TimelineEventType.trip,
+        title: "Perjalanan Selesai",
+        description:
+            "${trip.durationMinutes} menit • ${trip.avgSpeed.toStringAsFixed(0)} km/h • Max Coolant ${trip.maxCoolant}°C",
+        value: "${trip.distance.toStringAsFixed(1)} km",
+        subValue: "${trip.fuelEconomy.toStringAsFixed(1)} km/L",
+        rawDistance: trip.distance,
+        rawFuelEconomy: trip.fuelEconomy,
+      ),
+    );
   }
 
   for (final fuel in fuels) {
-    events.add(TimelineEvent(
-      id: fuel.id,
-      timestamp: fuel.timestamp,
-      type: TimelineEventType.fuel,
-      title: "Isi BBM (${fuel.fuelType})",
-      description: "Harga: ${currencyFormat.format(fuel.price)} • Odo: ${fuel.odometer.toStringAsFixed(0)} km",
-      value: "${fuel.liters.toStringAsFixed(1)} Liter",
-      subValue: fuel.economy != null ? "${fuel.economy!.toStringAsFixed(1)} km/L" : null,
-      rawCost: fuel.price,
-    ));
+    events.add(
+      TimelineEvent(
+        id: fuel.id,
+        timestamp: fuel.timestamp,
+        type: TimelineEventType.fuel,
+        title: "Isi BBM (${fuel.fuelType})",
+        description:
+            "Harga: ${currencyFormat.format(fuel.price)} • Odo: ${fuel.odometer.toStringAsFixed(0)} km",
+        value: "${fuel.liters.toStringAsFixed(1)} Liter",
+        subValue: fuel.economy != null
+            ? "${fuel.economy!.toStringAsFixed(1)} km/L"
+            : null,
+        rawCost: fuel.price,
+      ),
+    );
   }
 
   for (final maint in maints) {
-    events.add(TimelineEvent(
-      id: maint.id,
-      timestamp: maint.timestamp,
-      type: TimelineEventType.maintenance,
-      title: maint.type,
-      description: maint.description ?? "Perawatan berkala kendaraan",
-      value: currencyFormat.format(maint.cost),
-      subValue: "Odo: ${maint.odometer.toStringAsFixed(0)} km",
-      rawCost: maint.cost,
-    ));
+    events.add(
+      TimelineEvent(
+        id: maint.id,
+        timestamp: maint.timestamp,
+        type: TimelineEventType.maintenance,
+        title: maint.type,
+        description: maint.description ?? "Perawatan berkala kendaraan",
+        value: currencyFormat.format(maint.cost),
+        subValue: "Odo: ${maint.odometer.toStringAsFixed(0)} km",
+        rawCost: maint.cost,
+      ),
+    );
   }
 
   events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
   return AsyncValue.data(events);
 });
 
-final filteredTimelineEventsProvider = Provider<AsyncValue<List<TimelineEvent>>>((ref) {
-  final eventsAsync = ref.watch(timelineEventsProvider);
-  final dateFilter = ref.watch(selectedDateFilterProvider);
-  final typeFilter = ref.watch(selectedTypeFilterProvider);
+final filteredTimelineEventsProvider =
+    Provider<AsyncValue<List<TimelineEvent>>>((ref) {
+      final eventsAsync = ref.watch(timelineEventsProvider);
+      final dateFilter = ref.watch(selectedDateFilterProvider);
+      final typeFilter = ref.watch(selectedTypeFilterProvider);
 
-  return eventsAsync.whenData((events) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+      return eventsAsync.whenData((events) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
 
-    return events.where((event) {
-      // Type Filter
-      if (typeFilter != TypeFilter.all) {
-        if (typeFilter == TypeFilter.trip && event.type != TimelineEventType.trip) return false;
-        if (typeFilter == TypeFilter.fuel && event.type != TimelineEventType.fuel) return false;
-        if (typeFilter == TypeFilter.maintenance && event.type != TimelineEventType.maintenance) return false;
-      }
+        return events.where((event) {
+          // Type Filter
+          if (typeFilter != TypeFilter.all) {
+            if (typeFilter == TypeFilter.trip &&
+                event.type != TimelineEventType.trip)
+              return false;
+            if (typeFilter == TypeFilter.fuel &&
+                event.type != TimelineEventType.fuel)
+              return false;
+            if (typeFilter == TypeFilter.maintenance &&
+                event.type != TimelineEventType.maintenance)
+              return false;
+          }
 
-      // Date Filter
-      final eventDate = DateTime(event.timestamp.year, event.timestamp.month, event.timestamp.day);
-      switch (dateFilter) {
-        case DateFilter.all:
-          return true;
-        case DateFilter.today:
-          return eventDate.isAtSameMomentAs(today);
-        case DateFilter.thisWeek:
-          final startOfWeek = today.subtract(Duration(days: now.weekday - 1));
-          return eventDate.isAfter(startOfWeek.subtract(const Duration(seconds: 1)));
-        case DateFilter.thisMonth:
-          return event.timestamp.year == now.year && event.timestamp.month == now.month;
-        case DateFilter.thisYear:
-          return event.timestamp.year == now.year;
-      }
-    }).toList();
-  });
-});
+          // Date Filter
+          final eventDate = DateTime(
+            event.timestamp.year,
+            event.timestamp.month,
+            event.timestamp.day,
+          );
+          switch (dateFilter) {
+            case DateFilter.all:
+              return true;
+            case DateFilter.today:
+              return eventDate.isAtSameMomentAs(today);
+            case DateFilter.thisWeek:
+              final startOfWeek = today.subtract(
+                Duration(days: now.weekday - 1),
+              );
+              return eventDate.isAfter(
+                startOfWeek.subtract(const Duration(seconds: 1)),
+              );
+            case DateFilter.thisMonth:
+              return event.timestamp.year == now.year &&
+                  event.timestamp.month == now.month;
+            case DateFilter.thisYear:
+              return event.timestamp.year == now.year;
+          }
+        }).toList();
+      });
+    });
 
 class TimelineScreen extends ConsumerWidget {
   const TimelineScreen({super.key});
@@ -192,7 +232,9 @@ class TimelineScreen extends ConsumerWidget {
       settingsProvider.select((s) => s.isSimulatorMode),
     );
     final focusTripId = ref.watch(timelineFocusTripIdProvider);
-    final avgFuelEconomy = tripCountWithEconomy > 0 ? totalFuelEconomySum / tripCountWithEconomy : 0.0;
+    final avgFuelEconomy = tripCountWithEconomy > 0
+        ? totalFuelEconomySum / tripCountWithEconomy
+        : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -205,9 +247,14 @@ class TimelineScreen extends ConsumerWidget {
         elevation: 0,
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.more_vert_rounded,
+              color: AppColors.textSecondary,
+            ),
             color: AppColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             onSelected: (value) {
               if (value == 'clear_all') {
                 _clearAllHistory(context, ref);
@@ -218,9 +265,16 @@ class TimelineScreen extends ConsumerWidget {
                 value: 'clear_all',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_sweep_rounded, color: AppColors.danger, size: 20),
+                    Icon(
+                      Icons.delete_sweep_rounded,
+                      color: AppColors.danger,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
-                    Text('Hapus Semua Riwayat', style: TextStyle(color: AppColors.danger, fontSize: 13)),
+                    Text(
+                      'Hapus Semua Riwayat',
+                      style: TextStyle(color: AppColors.danger, fontSize: 13),
+                    ),
                   ],
                 ),
               ),
@@ -245,7 +299,10 @@ class TimelineScreen extends ConsumerWidget {
               Container(
                 width: double.infinity,
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.warning.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
@@ -253,12 +310,20 @@ class TimelineScreen extends ConsumerWidget {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.science_rounded, size: 16, color: AppColors.warning),
+                    Icon(
+                      Icons.science_rounded,
+                      size: 16,
+                      color: AppColors.warning,
+                    ),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Mode Simulasi Aktif — Perjalanan simulasi tidak dicatat ke linimasa.',
-                        style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -278,9 +343,9 @@ class TimelineScreen extends ConsumerWidget {
 
             // Combined Filter Bar (Date Dropdown & Type Pills)
             _buildFilterSection(context, ref, dateFilter, typeFilter),
-            
+
             const SizedBox(height: 6),
-            
+
             // Timeline list
             Expanded(
               child: eventsAsync.when(
@@ -309,7 +374,10 @@ class TimelineScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 'Hapus',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               SizedBox(width: 8),
                               Icon(Icons.delete_rounded, color: Colors.white),
@@ -320,7 +388,7 @@ class TimelineScreen extends ConsumerWidget {
                           return await _showDeleteConfirmDialog(
                             context,
                             'Hapus Aktivitas?',
-                            'Apakah Anda yakin ingin menghapus aktivitas "${event.title}" ini?'
+                            'Apakah Anda yakin ingin menghapus aktivitas "${event.title}" ini?',
                           );
                         },
                         onDismissed: (direction) async {
@@ -328,7 +396,9 @@ class TimelineScreen extends ConsumerWidget {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('"${event.title}" berhasil dihapus'),
+                                content: Text(
+                                  '"${event.title}" berhasil dihapus',
+                                ),
                                 backgroundColor: AppColors.success,
                               ),
                             );
@@ -338,7 +408,8 @@ class TimelineScreen extends ConsumerWidget {
                           context,
                           event,
                           index == events.length - 1,
-                          highlighted: focusTripId != null &&
+                          highlighted:
+                              focusTripId != null &&
                               event.type == TimelineEventType.trip &&
                               event.id == focusTripId,
                         ),
@@ -363,7 +434,11 @@ class TimelineScreen extends ConsumerWidget {
     double economy, {
     required DateFilter dateFilter,
   }) {
-    final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp', decimalDigits: 0);
+    final currencyFormat = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp',
+      decimalDigits: 0,
+    );
     final periodLabel = switch (dateFilter) {
       DateFilter.today => 'hari ini',
       DateFilter.thisWeek => 'minggu ini',
@@ -373,7 +448,7 @@ class TimelineScreen extends ConsumerWidget {
     };
     final insight = distance > 0
         ? 'Ringkasan $periodLabel: ${distance.toStringAsFixed(1)} km'
-            '${economy > 0 ? ', rata-rata ${economy.toStringAsFixed(1)} km/L' : ''}.'
+              '${economy > 0 ? ', rata-rata ${economy.toStringAsFixed(1)} km/L' : ''}.'
         : 'Belum ada perjalanan tercatat untuk $periodLabel.';
 
     return Container(
@@ -403,11 +478,26 @@ class TimelineScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatColumn('Jarak Tempuh', '${distance.toStringAsFixed(1)} km', Icons.directions_car_rounded, AppColors.primary),
+              _buildStatColumn(
+                'Jarak Tempuh',
+                '${distance.toStringAsFixed(1)} km',
+                Icons.directions_car_rounded,
+                AppColors.primary,
+              ),
               _buildStatDivider(),
-              _buildStatColumn('Pengeluaran', currencyFormat.format(cost), Icons.payments_rounded, AppColors.success),
+              _buildStatColumn(
+                'Pengeluaran',
+                currencyFormat.format(cost),
+                Icons.payments_rounded,
+                AppColors.success,
+              ),
               _buildStatDivider(),
-              _buildStatColumn('Konsumsi BBM', '${economy.toStringAsFixed(1)} km/L', Icons.local_gas_station_rounded, AppColors.warning),
+              _buildStatColumn(
+                'Konsumsi BBM',
+                '${economy.toStringAsFixed(1)} km/L',
+                Icons.local_gas_station_rounded,
+                AppColors.warning,
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -433,7 +523,12 @@ class TimelineScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStatColumn(String label, String value, IconData icon, Color color) {
+  Widget _buildStatColumn(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -449,7 +544,11 @@ class TimelineScreen extends ConsumerWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: AppTheme.numberStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            style: AppTheme.numberStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -457,7 +556,11 @@ class TimelineScreen extends ConsumerWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, color: Color(0xFF9EA7B8), fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 10,
+              color: Color(0xFF9EA7B8),
+              fontWeight: FontWeight.w500,
+            ),
             textAlign: TextAlign.center,
           ),
         ],
@@ -465,7 +568,12 @@ class TimelineScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilterSection(BuildContext context, WidgetRef ref, DateFilter activeDate, TypeFilter activeType) {
+  Widget _buildFilterSection(
+    BuildContext context,
+    WidgetRef ref,
+    DateFilter activeDate,
+    TypeFilter activeType,
+  ) {
     final dateFilters = {
       DateFilter.all: 'Semua Waktu',
       DateFilter.today: 'Hari Ini',
@@ -493,7 +601,9 @@ class TimelineScreen extends ConsumerWidget {
               ref.read(selectedDateFilterProvider.notifier).state = val;
             },
             color: AppColors.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
@@ -502,7 +612,9 @@ class TimelineScreen extends ConsumerWidget {
                     : Colors.white.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: activeDate != DateFilter.all ? AppColors.primary : Colors.white.withOpacity(0.1),
+                  color: activeDate != DateFilter.all
+                      ? AppColors.primary
+                      : Colors.white.withOpacity(0.1),
                 ),
               ),
               child: Row(
@@ -511,22 +623,30 @@ class TimelineScreen extends ConsumerWidget {
                   Icon(
                     Icons.calendar_today_rounded,
                     size: 13,
-                    color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                    color: activeDate != DateFilter.all
+                        ? AppColors.primary
+                        : const Color(0xFFA0AEC0),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     dateFilters[activeDate] ?? 'Waktu',
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: activeDate != DateFilter.all ? FontWeight.bold : FontWeight.w500,
-                      color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                      fontWeight: activeDate != DateFilter.all
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      color: activeDate != DateFilter.all
+                          ? AppColors.primary
+                          : const Color(0xFFA0AEC0),
                     ),
                   ),
                   const SizedBox(width: 4),
                   Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 16,
-                    color: activeDate != DateFilter.all ? AppColors.primary : const Color(0xFFA0AEC0),
+                    color: activeDate != DateFilter.all
+                        ? AppColors.primary
+                        : const Color(0xFFA0AEC0),
                   ),
                 ],
               ),
@@ -537,8 +657,12 @@ class TimelineScreen extends ConsumerWidget {
                 child: Text(
                   entry.value,
                   style: TextStyle(
-                    color: entry.key == activeDate ? AppColors.primary : AppColors.textPrimary,
-                    fontWeight: entry.key == activeDate ? FontWeight.bold : FontWeight.normal,
+                    color: entry.key == activeDate
+                        ? AppColors.primary
+                        : AppColors.textPrimary,
+                    fontWeight: entry.key == activeDate
+                        ? FontWeight.bold
+                        : FontWeight.normal,
                     fontSize: 13,
                   ),
                 ),
@@ -556,14 +680,20 @@ class TimelineScreen extends ConsumerWidget {
               padding: const EdgeInsets.only(right: 6.0),
               child: InkWell(
                 onTap: () {
-                  ref.read(selectedTypeFilterProvider.notifier).state = entry.key;
+                  ref.read(selectedTypeFilterProvider.notifier).state =
+                      entry.key;
                 },
                 borderRadius: BorderRadius.circular(20),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.06),
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.white.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: isSelected
                         ? [
@@ -578,8 +708,12 @@ class TimelineScreen extends ConsumerWidget {
                   child: Text(
                     entry.value,
                     style: TextStyle(
-                      color: isSelected ? Colors.white : const Color(0xFFA0AEC0),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFFA0AEC0),
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w500,
                       fontSize: 12,
                     ),
                   ),
@@ -604,19 +738,34 @@ class TimelineScreen extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1.5),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.2),
+                  width: 1.5,
+                ),
               ),
-              child: Icon(Icons.history_toggle_off_rounded, size: 52, color: AppColors.primary.withOpacity(0.85)),
+              child: Icon(
+                Icons.history_toggle_off_rounded,
+                size: 52,
+                color: AppColors.primary.withOpacity(0.85),
+              ),
             ),
             const SizedBox(height: 20),
             const Text(
               'Belum Ada Riwayat Aktivitas',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Catat pengisian BBM atau servis kendaraan Anda untuk memantau pengeluaran dan efisiensi konsumsi bahan bakar.',
-              style: TextStyle(color: Color(0xFF9EA7B8), fontSize: 12, height: 1.4),
+              style: TextStyle(
+                color: Color(0xFF9EA7B8),
+                fontSize: 12,
+                height: 1.4,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -630,11 +779,19 @@ class TimelineScreen extends ConsumerWidget {
                     backgroundColor: AppColors.primary.withOpacity(0.15),
                     foregroundColor: AppColors.primary,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
                   icon: const Icon(Icons.local_gas_station_rounded, size: 18),
-                  label: const Text('Catat BBM', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  label: const Text(
+                    'Catat BBM',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                   onPressed: () => _showAddFuelDialog(context, ref),
                 ),
                 ElevatedButton.icon(
@@ -642,11 +799,19 @@ class TimelineScreen extends ConsumerWidget {
                     backgroundColor: AppColors.warning.withOpacity(0.15),
                     foregroundColor: AppColors.warning,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
                   icon: const Icon(Icons.build_rounded, size: 18),
-                  label: const Text('Catat Servis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  label: const Text(
+                    'Catat Servis',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                   onPressed: () => _showAddMaintDialog(context, ref),
                 ),
               ],
@@ -686,7 +851,9 @@ class TimelineScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
                 ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   tileColor: AppColors.card,
                   leading: Container(
                     padding: const EdgeInsets.all(10),
@@ -694,11 +861,23 @@ class TimelineScreen extends ConsumerWidget {
                       color: AppColors.primary.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.local_gas_station_rounded, color: AppColors.primary),
+                    child: const Icon(
+                      Icons.local_gas_station_rounded,
+                      color: AppColors.primary,
+                    ),
                   ),
-                  title: const Text('Isi Bahan Bakar (BBM)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Catat volume, harga, dan odometer pengisian', style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8))),
-                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                  title: const Text(
+                    'Isi Bahan Bakar (BBM)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Catat volume, harga, dan odometer pengisian',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8)),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _showAddFuelDialog(context, ref);
@@ -706,7 +885,9 @@ class TimelineScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   tileColor: AppColors.card,
                   leading: Container(
                     padding: const EdgeInsets.all(10),
@@ -714,11 +895,23 @@ class TimelineScreen extends ConsumerWidget {
                       color: AppColors.warning.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.build_rounded, color: AppColors.warning),
+                    child: const Icon(
+                      Icons.build_rounded,
+                      color: AppColors.warning,
+                    ),
                   ),
-                  title: const Text('Servis / Perawatan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: const Text('Catat ganti oli, perbaikan, atau biaya perawatan', style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8))),
-                  trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+                  title: const Text(
+                    'Servis / Perawatan',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  subtitle: const Text(
+                    'Catat ganti oli, perbaikan, atau biaya perawatan',
+                    style: TextStyle(fontSize: 11, color: Color(0xFF9EA7B8)),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textSecondary,
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _showAddMaintDialog(context, ref);
@@ -787,15 +980,12 @@ class TimelineScreen extends ConsumerWidget {
               ),
               if (!isLast)
                 Expanded(
-                  child: Container(
-                    width: 2,
-                    color: AppColors.timelineTrack,
-                  ),
+                  child: Container(width: 2, color: AppColors.timelineTrack),
                 ),
             ],
           ),
           const SizedBox(width: 8),
-          
+
           // Card content
           Expanded(
             child: Padding(
@@ -823,17 +1013,27 @@ class TimelineScreen extends ConsumerWidget {
                           children: [
                             Text(
                               event.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               event.description,
-                              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, height: 1.3),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                height: 1.3,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               formattedTime,
-                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -844,15 +1044,22 @@ class TimelineScreen extends ConsumerWidget {
                         children: [
                           Text(
                             event.value,
-                            style: AppTheme.numberStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            style: AppTheme.numberStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                           if (event.subValue != null) ...[
                             const SizedBox(height: 4),
                             Text(
                               event.subValue!,
-                              style: AppTheme.numberStyle(fontSize: 11, color: AppColors.textSecondary),
+                              style: AppTheme.numberStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                          ]
+                          ],
                         ],
                       ),
                     ],
@@ -866,39 +1073,66 @@ class TimelineScreen extends ConsumerWidget {
     );
   }
 
-  Future<bool> _showDeleteConfirmDialog(BuildContext context, String title, String content) async {
+  Future<bool> _showDeleteConfirmDialog(
+    BuildContext context,
+    String title,
+    String content,
+  ) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(content),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Text(content),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text(
+                  'Batal',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text(
+                  'Hapus',
+                  style: TextStyle(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Hapus', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
-  Future<void> _deleteEvent(BuildContext context, WidgetRef ref, TimelineEvent event) async {
+  Future<void> _deleteEvent(
+    BuildContext context,
+    WidgetRef ref,
+    TimelineEvent event,
+  ) async {
     final db = ref.read(databaseProvider);
     switch (event.type) {
       case TimelineEventType.trip:
         await (db.delete(db.trips)..where((t) => t.id.equals(event.id))).go();
         break;
       case TimelineEventType.fuel:
-        await (db.delete(db.fuelLogs)..where((f) => f.id.equals(event.id))).go();
+        await (db.delete(
+          db.fuelLogs,
+        )..where((f) => f.id.equals(event.id))).go();
         break;
       case TimelineEventType.maintenance:
-        await (db.delete(db.maintenanceLogs)..where((m) => m.id.equals(event.id))).go();
+        await (db.delete(
+          db.maintenanceLogs,
+        )..where((m) => m.id.equals(event.id))).go();
         break;
     }
   }
@@ -907,14 +1141,14 @@ class TimelineScreen extends ConsumerWidget {
     final confirmed = await _showDeleteConfirmDialog(
       context,
       'Hapus Semua Riwayat?',
-      'Tindakan ini akan menghapus semua data perjalanan, pengisian BBM, dan servis secara permanen. Tindakan ini tidak dapat dibatalkan.'
+      'Tindakan ini akan menghapus semua data perjalanan, pengisian BBM, dan servis secara permanen. Tindakan ini tidak dapat dibatalkan.',
     );
     if (confirmed) {
       final db = ref.read(databaseProvider);
       await db.delete(db.trips).go();
       await db.delete(db.fuelLogs).go();
       await db.delete(db.maintenanceLogs).go();
-      
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -927,7 +1161,9 @@ class TimelineScreen extends ConsumerWidget {
   }
 
   void _showAddFuelDialog(BuildContext context, WidgetRef ref) {
-    final odoController = TextEditingController(text: ref.read(settingsProvider).currentOdometer.toStringAsFixed(0));
+    final odoController = TextEditingController(
+      text: ref.read(settingsProvider).currentOdometer.toStringAsFixed(0),
+    );
     final litersController = TextEditingController();
     final priceController = TextEditingController();
     String fuelType = 'Pertalite';
@@ -937,13 +1173,16 @@ class TimelineScreen extends ConsumerWidget {
       builder: (context) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          title: const Text('Catat Pengisian BBM', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Catat Pengisian BBM',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: fuelType,
+                  initialValue: fuelType,
                   decoration: const InputDecoration(labelText: 'Jenis BBM'),
                   items: AppConstants.fuelTypes.map((type) {
                     return DropdownMenuItem(value: type, child: Text(type));
@@ -955,14 +1194,22 @@ class TimelineScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 TextField(
                   controller: litersController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Jumlah (Liter)', suffixText: 'L'),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Jumlah (Liter)',
+                    suffixText: 'L',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Total Harga (Rupiah)', prefixText: 'Rp '),
+                  decoration: const InputDecoration(
+                    labelText: 'Total Harga (Rupiah)',
+                    prefixText: 'Rp ',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -980,7 +1227,10 @@ class TimelineScreen extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             FilledButton(
               onPressed: () async {
@@ -990,13 +1240,19 @@ class TimelineScreen extends ConsumerWidget {
 
                 if (liters > 0 && price > 0 && odo > 0) {
                   final db = ref.read(databaseProvider);
-                  
+
                   // Estimate economy based on last fuel log if odometer increased
                   double? economy;
-                  final fuelLogs = await (db.select(db.fuelLogs)
-                    ..orderBy([(f) => OrderingTerm(expression: f.odometer, mode: OrderingMode.desc)])
-                    ..limit(1))
-                    .get();
+                  final fuelLogs =
+                      await (db.select(db.fuelLogs)
+                            ..orderBy([
+                              (f) => OrderingTerm(
+                                expression: f.odometer,
+                                mode: OrderingMode.desc,
+                              ),
+                            ])
+                            ..limit(1))
+                          .get();
                   if (fuelLogs.isNotEmpty) {
                     final prevOdo = fuelLogs.first.odometer;
                     final odoDiff = odo - prevOdo;
@@ -1005,16 +1261,18 @@ class TimelineScreen extends ConsumerWidget {
                     }
                   }
 
-                  await db.into(db.fuelLogs).insert(
-                    FuelLogsCompanion.insert(
-                      timestamp: DateTime.now(),
-                      fuelType: fuelType,
-                      liters: liters,
-                      price: price,
-                      odometer: odo,
-                      economy: Value(economy),
-                    ),
-                  );
+                  await db
+                      .into(db.fuelLogs)
+                      .insert(
+                        FuelLogsCompanion.insert(
+                          timestamp: DateTime.now(),
+                          fuelType: fuelType,
+                          liters: liters,
+                          price: price,
+                          odometer: odo,
+                          economy: Value(economy),
+                        ),
+                      );
 
                   // Update odometer in settings
                   await ref.read(settingsProvider.notifier).updateOdometer(odo);
@@ -1031,7 +1289,9 @@ class TimelineScreen extends ConsumerWidget {
   }
 
   void _showAddMaintDialog(BuildContext context, WidgetRef ref) {
-    final odoController = TextEditingController(text: ref.read(settingsProvider).currentOdometer.toStringAsFixed(0));
+    final odoController = TextEditingController(
+      text: ref.read(settingsProvider).currentOdometer.toStringAsFixed(0),
+    );
     final costController = TextEditingController();
     final descController = TextEditingController();
     String maintType = AppConstants.defaultMaintenanceType;
@@ -1041,16 +1301,22 @@ class TimelineScreen extends ConsumerWidget {
       builder: (context) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          title: const Text('Catat Servis / Perawatan', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Catat Servis / Perawatan',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: maintType,
+                  initialValue: maintType,
                   decoration: const InputDecoration(labelText: 'Jenis Servis'),
                   items: AppConstants.maintenanceTypes.entries.map((entry) {
-                    return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                    return DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    );
                   }).toList(),
                   onChanged: (val) {
                     if (val != null) maintType = val;
@@ -1059,15 +1325,21 @@ class TimelineScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 TextField(
                   controller: descController,
-                  decoration: const InputDecoration(labelText: 'Deskripsi Tambahan (e.g. Merk Oli)', hintText: 'Opsional'),
+                  decoration: const InputDecoration(
+                    labelText: 'Deskripsi Tambahan (e.g. Merk Oli)',
+                    hintText: 'Opsional',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: costController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Biaya Servis', prefixText: 'Rp '),
+                  decoration: const InputDecoration(
+                    labelText: 'Biaya Servis',
+                    prefixText: 'Rp ',
+                  ),
                 ),
-                 const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 TextField(
                   controller: odoController,
                   readOnly: true,
@@ -1083,7 +1355,10 @@ class TimelineScreen extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             FilledButton(
               onPressed: () async {
@@ -1093,20 +1368,24 @@ class TimelineScreen extends ConsumerWidget {
 
                 if (odo > 0) {
                   final db = ref.read(databaseProvider);
-                  await db.into(db.maintenanceLogs).insert(
-                    MaintenanceLogsCompanion.insert(
-                      timestamp: DateTime.now(),
-                      type: maintType,
-                      description: Value(desc.isNotEmpty ? desc : null),
-                      odometer: odo,
-                      cost: Value(cost),
-                    ),
-                  );
+                  await db
+                      .into(db.maintenanceLogs)
+                      .insert(
+                        MaintenanceLogsCompanion.insert(
+                          timestamp: DateTime.now(),
+                          type: maintType,
+                          description: Value(desc.isNotEmpty ? desc : null),
+                          odometer: odo,
+                          cost: Value(cost),
+                        ),
+                      );
 
                   // Update settings odometer & oil target (if oil changed, set next oil target to odo + 5000 km)
                   await ref.read(settingsProvider.notifier).updateOdometer(odo);
                   if (maintType == AppConstants.maintenanceTypes.keys.first) {
-                    await ref.read(settingsProvider.notifier).updateNextOilOdometer(odo + 5000.0);
+                    await ref
+                        .read(settingsProvider.notifier)
+                        .updateNextOilOdometer(odo + 5000.0);
                   }
 
                   if (context.mounted) Navigator.pop(context);

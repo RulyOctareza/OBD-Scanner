@@ -31,7 +31,8 @@ class LiveDataScreen extends ConsumerWidget {
         elevation: 0,
       ),
       body: SafeArea(
-        child: obdState.status != ObdStatus.connected &&
+        child:
+            obdState.status != ObdStatus.connected &&
                 obdState.status != ObdStatus.initializing
             ? ObdNotConnectedView(
                 state: obdState,
@@ -79,8 +80,8 @@ class LiveDataScreen extends ConsumerWidget {
                       color: telemetry.coolant > 100
                           ? AppColors.danger
                           : (telemetry.coolant > 95
-                              ? AppColors.warning
-                              : AppColors.success),
+                                ? AppColors.warning
+                                : AppColors.success),
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.voltage, obdState))
                     _buildMetricCard(
@@ -121,7 +122,7 @@ class LiveDataScreen extends ConsumerWidget {
                       context,
                       ObdMetricType.map,
                       'Tekanan Intake',
-                      '${telemetry.mapValue.toStringAsFixed(0)}',
+                      telemetry.mapValue.toStringAsFixed(0),
                       'MAP · kPa',
                       icon: Icons.compress_rounded,
                       color: AppColors.primary,
@@ -141,10 +142,10 @@ class LiveDataScreen extends ConsumerWidget {
                       icon: Icons.ac_unit_rounded,
                       color: telemetry.intakeAirTemp != null
                           ? (telemetry.intakeAirTemp! > 70
-                              ? AppColors.danger
-                              : telemetry.intakeAirTemp! > 50
-                                  ? AppColors.warning
-                                  : AppColors.success)
+                                ? AppColors.danger
+                                : telemetry.intakeAirTemp! > 50
+                                ? AppColors.warning
+                                : AppColors.success)
                           : AppColors.textSecondary,
                     ),
                   if (!_isMetricUnsupported(ObdMetricType.maf, obdState))

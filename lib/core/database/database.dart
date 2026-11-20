@@ -18,9 +18,12 @@ class Trips extends Table {
   DateTimeColumn get startTime => dateTime()();
   DateTimeColumn get endTime => dateTime().nullable()();
   RealColumn get distance => real().withDefault(const Constant(0.0))(); // in km
-  RealColumn get fuelEconomy => real().withDefault(const Constant(0.0))(); // in km/L
-  RealColumn get avgSpeed => real().withDefault(const Constant(0.0))(); // in km/h
-  IntColumn get maxCoolant => integer().withDefault(const Constant(0))(); // in C
+  RealColumn get fuelEconomy =>
+      real().withDefault(const Constant(0.0))(); // in km/L
+  RealColumn get avgSpeed =>
+      real().withDefault(const Constant(0.0))(); // in km/h
+  IntColumn get maxCoolant =>
+      integer().withDefault(const Constant(0))(); // in C
   IntColumn get maxRpm => integer().withDefault(const Constant(0))();
   IntColumn get tripHealthScore => integer().withDefault(const Constant(100))();
   IntColumn get durationMinutes => integer().withDefault(const Constant(0))();
@@ -29,7 +32,11 @@ class Trips extends Table {
 
 class TripPoints extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get tripId => integer().nullable().references(Trips, #id, onDelete: KeyAction.cascade)();
+  IntColumn get tripId => integer().nullable().references(
+    Trips,
+    #id,
+    onDelete: KeyAction.cascade,
+  )();
   DateTimeColumn get timestamp => dateTime()();
   RealColumn get rpm => real()();
   RealColumn get speed => real()();
@@ -58,7 +65,8 @@ class FuelLogs extends Table {
 class MaintenanceLogs extends Table {
   IntColumn get id => integer().autoIncrement()();
   DateTimeColumn get timestamp => dateTime()();
-  TextColumn get type => text()(); // Oil Change, Air Filter, Coolant Flush, etc.
+  TextColumn get type =>
+      text()(); // Oil Change, Air Filter, Coolant Flush, etc.
   TextColumn get description => text().nullable()();
   RealColumn get odometer => real()();
   RealColumn get cost => real().withDefault(const Constant(0.0))();
@@ -82,10 +90,20 @@ class UserPreferences extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Vehicles, Trips, TripPoints, FuelLogs, MaintenanceLogs, DtcLogs, UserPreferences])
+@DriftDatabase(
+  tables: [
+    Vehicles,
+    Trips,
+    TripPoints,
+    FuelLogs,
+    MaintenanceLogs,
+    DtcLogs,
+    UserPreferences,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
-  AppDatabase.withExecutor(QueryExecutor e) : super(e);
+  AppDatabase.withExecutor(super.e);
 
   @override
   int get schemaVersion => 3;
@@ -122,10 +140,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setPreference(String key, String value) async {
     try {
       await into(userPreferences).insertOnConflictUpdate(
-        UserPreferencesCompanion(
-          key: Value(key),
-          value: Value(value),
-        ),
+        UserPreferencesCompanion(key: Value(key), value: Value(value)),
       );
     } catch (e) {
       debugPrint('UserPreferences write failed ($key): $e');
