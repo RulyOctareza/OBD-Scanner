@@ -456,6 +456,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     if (state.autoConnectOBD == val) return;
     state = state.copyWith(autoConnectOBD: val);
     await _ref.read(databaseProvider).setBoolPreference('auto_connect_obd', val);
+    if (val) {
+      // Re-arm backoff after the user explicitly re-enables auto-connect.
+      try {
+        _ref.read(obdServiceProvider.notifier).allowAutoReconnect();
+      } catch (_) {}
+    }
   }
 
   Future<void> updateLastOBDAddress(String address) async {

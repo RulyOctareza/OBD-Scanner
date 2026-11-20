@@ -13,6 +13,7 @@ import '../obd/obd_telemetry.dart';
 import '../obd/vin_decoder.dart';
 import '../database/database.dart';
 import '../database/database_provider.dart';
+import '../services/background_service.dart';
 import '../../features/settings/presentation/settings_provider.dart';
 import '../../features/live_data/presentation/widgets/gauge_widget.dart';
 
@@ -71,7 +72,16 @@ enum ObdStatus {
 
 class ObdState {
   final ObdStatus status;
+
+  /// One line, shown in banners and snackbars.
   final String? errorMessage;
+
+  /// Multi-line troubleshooting steps for [errorMessage], shown in the
+  /// connection sheet only.
+  final String? errorHelp;
+
+  /// Current step or retry text while connecting; null otherwise.
+  final String? statusDetail;
   final ObdTelemetry telemetry;
   final bool isSimulatorMode;
   final String? connectedDeviceName;
@@ -85,6 +95,8 @@ class ObdState {
   ObdState({
     required this.status,
     this.errorMessage,
+    this.errorHelp,
+    this.statusDetail,
     required this.telemetry,
     required this.isSimulatorMode,
     this.connectedDeviceName,
@@ -109,6 +121,8 @@ class ObdState {
   ObdState copyWith({
     ObdStatus? status,
     Object? errorMessage = _obdUnset,
+    Object? errorHelp = _obdUnset,
+    Object? statusDetail = _obdUnset,
     ObdTelemetry? telemetry,
     bool? isSimulatorMode,
     Object? connectedDeviceName = _obdUnset,
@@ -124,6 +138,12 @@ class ObdState {
       errorMessage: identical(errorMessage, _obdUnset)
           ? this.errorMessage
           : errorMessage as String?,
+      errorHelp: identical(errorHelp, _obdUnset)
+          ? this.errorHelp
+          : errorHelp as String?,
+      statusDetail: identical(statusDetail, _obdUnset)
+          ? this.statusDetail
+          : statusDetail as String?,
       telemetry: telemetry ?? this.telemetry,
       isSimulatorMode: isSimulatorMode ?? this.isSimulatorMode,
       connectedDeviceName: identical(connectedDeviceName, _obdUnset)
@@ -143,6 +163,12 @@ class ObdState {
 
 const Object _obdUnset = Object();
 
+/// Thrown inside a connect attempt that was cancelled or superseded; the
+/// attempt then exits without touching state.
+class _ConnectCancelled implements Exception {
+  const _ConnectCancelled();
+}
+
 class ObdService extends StateNotifier<ObdState> {
   final Ref _ref;
   final ObdSimulator _simulator = ObdSimulator();
@@ -153,12 +179,61 @@ class ObdService extends StateNotifier<ObdState> {
   Completer<String>? _pendingResponseCompleter;
 
   final StringBuffer _rxBuffer = StringBuffer();
-  final List<String> _pendingCommands = ['AT RV', '010C', '010D', '0105', '010F', '010B', '0110', '010E', '0111', '0104', '01A6', '012F', '03'];
+  // Live PIDs only. Mode 03 (DTCs) is polled sparsely to cut BT radio use.
+  final List<String> _pendingCommands = [
+    'AT RV',
+    '010C',
+    '010D',
+    '0105',
+    '010F',
+    '010B',
+    '0110',
+    '010E',
+    '0111',
+    '0104',
+    '01A6',
+    '012F',
+  ];
   int _currentCommandIndex = 0;
+  int _pollCycleCount = 0;
   bool _isAwaitingResponse = false;
   DateTime? _lastActivityTime;
+  bool _userRequestedDisconnect = false;
+
+  /// Backoff for auto-reconnect: 15s → 30s → 60s → 120s (cap).
+  Duration _reconnectDelay = const Duration(seconds: 15);
+  static const Duration _minReconnectDelay = Duration(seconds: 15);
+  static const Duration _maxReconnectDelay = Duration(seconds: 120);
+  /// Poll stored DTCs once every N full live-PID cycles (~every ~30–60s).
+  static const int _dtcPollEveryNCycles = 20;
 
   static const int _responseTimeoutMs = 3000;
+
+  /// The vendored plugin's native connect runs up to three blocking RFCOMM
+  /// attempts in a row (packages/flutter_bluetooth_serial/LOCAL_CHANGES.md).
+  /// This must exceed their sum, otherwise a native connect that is still
+  /// running gets abandoned.
+  static const Duration _socketOpenTimeout = Duration(seconds: 40);
+
+  /// Bumped by every new connect, cancel and disconnect. A connect attempt
+  /// whose token is no longer current must not touch state or the socket.
+  int _connectToken = 0;
+
+  /// Bumped whenever a socket is attached or torn down. Listener callbacks of
+  /// an older socket compare against it and are ignored, because disposing a
+  /// plugin connection fires its input `onDone` asynchronously.
+  int _linkGeneration = 0;
+
+  /// Completes when the most recent native connect has finished either way.
+  Future<void>? _socketOpenInFlight;
+
+  bool _pollingActive = false;
+  Future<void> _exclusiveTail = Future.value();
+  int _autoConnectHolds = 0;
+
+  bool get _isConnectBusy =>
+      state.status == ObdStatus.connecting ||
+      state.status == ObdStatus.initializing;
 
   ObdService(this._ref) : super(ObdState.initial()) {
     Future.microtask(() async {
@@ -189,54 +264,99 @@ class ObdService extends StateNotifier<ObdState> {
     if (Platform.environment.containsKey('FLUTTER_TEST')) {
       return;
     }
+    _scheduleNextReconnectCheck();
+  }
+
+  void _scheduleNextReconnectCheck() {
     _autoReconnectTimer?.cancel();
-    _autoReconnectTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
+    _autoReconnectTimer = Timer(_reconnectDelay, () async {
       try {
-        if (state.isSimulatorMode) return;
+        if (!mounted) return;
+        if (state.isSimulatorMode || _userRequestedDisconnect) {
+          _scheduleNextReconnectCheck();
+          return;
+        }
 
         final db = _ref.read(databaseProvider);
-        final autoConnectOBD = await db.getBoolPreference('auto_connect_obd') ?? true;
-        final isSimulatorMode = await db.getBoolPreference('is_simulator_mode') ?? false;
+        final autoConnectOBD =
+            await db.getBoolPreference('auto_connect_obd') ?? true;
+        final isSimulatorMode =
+            await db.getBoolPreference('is_simulator_mode') ?? false;
 
-        if (autoConnectOBD &&
+        final shouldAttempt = autoConnectOBD &&
             !isSimulatorMode &&
             !state.isSimulatorMode &&
-            (state.status == ObdStatus.disconnected || state.status == ObdStatus.error)) {
-          _autoConnect();
+            (state.status == ObdStatus.disconnected ||
+                state.status == ObdStatus.error);
+
+        if (shouldAttempt) {
+          final before = state.status;
+          await _autoConnect();
+          // Back off when still disconnected after an attempt.
+          if (mounted &&
+              (state.status == ObdStatus.disconnected ||
+                  state.status == ObdStatus.error) &&
+              before != ObdStatus.connected) {
+            _bumpReconnectDelay();
+          }
         }
       } catch (e) {
         debugPrint('Auto-reconnect check failed: $e');
+        _bumpReconnectDelay();
+      }
+      if (mounted) {
+        _scheduleNextReconnectCheck();
       }
     });
   }
 
+  void _bumpReconnectDelay() {
+    final nextMs = (_reconnectDelay.inMilliseconds * 2)
+        .clamp(_minReconnectDelay.inMilliseconds, _maxReconnectDelay.inMilliseconds);
+    _reconnectDelay = Duration(milliseconds: nextMs);
+  }
+
+  void _resetReconnectDelay() {
+    _reconnectDelay = _minReconnectDelay;
+  }
+
+  /// The connection sheet holds auto-connect while it is open, so a
+  /// background attempt neither grabs the dongle nor cancels discovery while
+  /// the user is choosing or pairing a device.
+  void holdAutoConnect() => _autoConnectHolds++;
+
+  void releaseAutoConnect() {
+    if (_autoConnectHolds > 0) _autoConnectHolds--;
+  }
+
   Future<void> _autoConnect() async {
     if (state.isSimulatorMode) return;
-    if (state.status == ObdStatus.connecting || state.status == ObdStatus.initializing) {
+    if (_autoConnectHolds > 0) return;
+    if (_isConnectBusy || state.status == ObdStatus.connected) {
       return;
     }
     try {
       final db = _ref.read(databaseProvider);
-      final lastAddress = await db.getPreference('last_obd_device_address') ?? "";
+      final lastAddress =
+          await db.getPreference('last_obd_device_address') ?? '';
       if (lastAddress.isEmpty) return;
 
       final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
       if (isEnabled != true) return;
 
+      // Do not prompt for permissions on the background reconnect path —
+      // that wakes the permission / location stack every cycle.
       final connectGranted = await Permission.bluetoothConnect.isGranted;
       if (!connectGranted) return;
 
       debugPrint('Auto-connecting to last device: $lastAddress');
-      // Retrieve device name if possible, or just create a dummy one
-      final bondedDevices = await getPairedDevices();
-      BluetoothDevice? targetDevice;
-      try {
-         targetDevice = bondedDevices.firstWhere((d) => d.address == lastAddress);
-      } catch (_) {}
-      
-      if (targetDevice != null) {
-        await connectToDevice(targetDevice);
-      }
+      final lastName =
+          await db.getPreference('last_obd_device_name') ?? 'OBD-II';
+      final targetDevice = BluetoothDevice(
+        name: lastName,
+        address: lastAddress,
+      );
+      await connectToDevice(targetDevice, maxRetries: 1);
     } catch (e) {
       debugPrint('Auto-connect failed: $e');
     }
@@ -263,8 +383,12 @@ class ObdService extends StateNotifier<ObdState> {
     }
 
     if (value) {
+      // Abandon any real connect in flight so it cannot flip state to a real
+      // link after the simulator took over.
+      _connectToken++;
       _disconnectReal();
       _stopSimulation();
+      unawaited(stopBackgroundMonitoring());
 
       var ignitionOn = true;
       try {
@@ -279,6 +403,8 @@ class ObdService extends StateNotifier<ObdState> {
         connectedDeviceName: 'Simulator',
         connectedDeviceAddress: null,
         errorMessage: null,
+        errorHelp: null,
+        statusDetail: null,
         supportedSensors: const {},
         checkedSensors: const {},
         simHighTemp: false,
@@ -296,6 +422,8 @@ class ObdService extends StateNotifier<ObdState> {
         connectedDeviceName: null,
         connectedDeviceAddress: null,
         errorMessage: null,
+        errorHelp: null,
+        statusDetail: null,
         supportedSensors: const {},
         checkedSensors: const {},
         simHighTemp: false,
@@ -328,23 +456,14 @@ class ObdService extends StateNotifier<ObdState> {
     );
   }
 
-  Future<List<BluetoothDevice>> getPairedDevices() async {
-    if (kIsWeb) return [];
-    await [
-      Permission.bluetooth,
-      Permission.bluetoothConnect,
-      Permission.bluetoothScan,
-      Permission.location,
-    ].request();
-    try {
-      return await FlutterBluetoothSerial.instance.getBondedDevices();
-    } catch (e) {
-      debugPrint("Error fetching paired devices: $e");
-      return [];
-    }
-  }
+  Future<void> connectToDevice(
+    BluetoothDevice device, {
+    int maxRetries = 2,
+  }) async {
+    if (_isConnectBusy) return;
+    final token = ++_connectToken;
+    _userRequestedDisconnect = false;
 
-  Future<void> connectToDevice(BluetoothDevice device) async {
     if (state.isSimulatorMode) {
       applySimulatorMode(false);
       // Keep Settings toggle in sync (avoid "ON in UI, OFF in OBD").
@@ -356,83 +475,203 @@ class ObdService extends StateNotifier<ObdState> {
       );
     }
 
+    // Switching adapters: tear the current link down first, otherwise its
+    // socket leaks when _connection is replaced and keeps holding that dongle.
+    if (_connection != null) {
+      _disconnectReal();
+      unawaited(stopBackgroundMonitoring());
+    }
+
+    final deviceName = device.name ?? 'OBD-II';
     state = state.copyWith(
       status: ObdStatus.connecting,
       errorMessage: null,
+      errorHelp: null,
+      statusDetail: 'Membuka koneksi Bluetooth…',
       connectedDeviceName: device.name,
       connectedDeviceAddress: device.address,
       supportedSensors: const {},
       checkedSensors: const {},
     );
 
-    const int maxRetries = 3;
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        try {
-          await FlutterBluetoothSerial.instance.cancelDiscovery();
-        } catch (e) {
-          debugPrint("Error canceling discovery: $e");
-        }
+        final connection = await _openSocket(device.address, token);
+        _connection = connection;
+        _attachListener(connection);
 
-        _connection = await BluetoothConnection.toAddress(device.address)
-            .timeout(const Duration(seconds: 20));
+        state = state.copyWith(
+          status: ObdStatus.initializing,
+          statusDetail: 'Menyiapkan adapter ELM327…',
+        );
 
-        state = state.copyWith(status: ObdStatus.initializing);
+        await _initElm327(token);
 
-        _connection!.input!.listen(_onDataReceived).onDone(() {
-          _onConnectionLost("Connection closed by ELM327.");
-        });
+        state = state.copyWith(
+          status: ObdStatus.connected,
+          statusDetail: null,
+          errorMessage: null,
+          errorHelp: null,
+        );
+        _resetReconnectDelay();
 
-        await _initElm327();
-
-        state = state.copyWith(status: ObdStatus.connected);
-        
-        // Save the address for future auto-connect
-        _ref.read(settingsProvider.notifier).updateLastOBDAddress(device.address);
+        // Save address + name for future auto-connect (no bonded-list scan).
+        final settings = _ref.read(settingsProvider.notifier);
+        settings.updateLastOBDAddress(device.address);
+        unawaited(
+          _ref.read(databaseProvider).setPreference(
+                'last_obd_device_name',
+                deviceName,
+              ),
+        );
 
         _startPolling();
+        unawaited(startBackgroundMonitoring());
+        return;
+      } on _ConnectCancelled {
         return;
       } catch (e) {
+        if (token != _connectToken) return;
         _disconnectReal();
         if (attempt == maxRetries) {
-          String friendlyMessage = "Koneksi gagal: $e";
-          final errStr = e.toString().toLowerCase();
-          if (errStr.contains("read failed") || errStr.contains("socket might closed") || errStr.contains("timeout")) {
-            friendlyMessage = "Gagal menyambungkan ke OBD-II.\n\n"
-                "Silakan coba langkah berikut:\n"
-                "1. Cabut dongle OBD-II dari mobil selama 10 detik, lalu pasang kembali.\n"
-                "2. Tutup paksa (force close) semua aplikasi OBD lain (Torque, Car Scanner, dll).\n"
-                "3. 'Lupakan Perangkat' (Unpair) di Pengaturan Bluetooth HP, lalu pair ulang.";
-          }
+          final failure = _describeConnectFailure(e, deviceName);
           state = state.copyWith(
             status: ObdStatus.error,
-            errorMessage: friendlyMessage,
+            statusDetail: null,
+            errorMessage: failure.message,
+            errorHelp: failure.help,
           );
+          unawaited(stopBackgroundMonitoring());
         } else {
           state = state.copyWith(
             status: ObdStatus.connecting,
-            errorMessage: "Percobaan $attempt dari $maxRetries gagal. Mencoba lagi...",
+            statusDetail:
+                'Percobaan $attempt dari $maxRetries gagal, mencoba lagi…',
           );
           await Future.delayed(const Duration(seconds: 2));
+          if (token != _connectToken) return;
         }
       }
     }
   }
 
-  Future<void> _initElm327() async {
-    final initCommands = ['AT Z\r', 'AT E0\r', 'AT SP 0\r'];
+  /// Abandons a connect in progress. A native connect that is still running
+  /// is closed when it finishes (see [_openSocket]).
+  void cancelConnect() {
+    if (!_isConnectBusy) return;
+    _connectToken++;
+    _userRequestedDisconnect = true;
+    _disconnectReal();
+    state = state.copyWith(
+      status: ObdStatus.disconnected,
+      statusDetail: null,
+      errorMessage: null,
+      errorHelp: null,
+      supportedSensors: const {},
+      checkedSensors: const {},
+    );
+    unawaited(stopBackgroundMonitoring());
+  }
+
+  /// Opens the RFCOMM socket without ever leaving one this process does not
+  /// own: the dongle accepts a single client, so an orphaned socket blocks
+  /// every later attempt until the app is killed.
+  Future<BluetoothConnection> _openSocket(String address, int token) async {
+    final previous = _socketOpenInFlight;
+    if (previous != null) {
+      // Two native connects to the same dongle at once make both fail.
+      state = state.copyWith(
+        statusDetail: 'Menunggu koneksi sebelumnya ditutup…',
+      );
+      await previous.timeout(_socketOpenTimeout, onTimeout: () {});
+      _throwIfCancelled(token);
+      state = state.copyWith(statusDetail: 'Membuka koneksi Bluetooth…');
+    }
+
+    try {
+      await FlutterBluetoothSerial.instance.cancelDiscovery();
+    } catch (e) {
+      debugPrint('Error canceling discovery: $e');
+    }
+    _throwIfCancelled(token);
+
+    // A Dart timeout does not stop the native connect, so a socket that opens
+    // after the timeout is disposed here instead of being dropped.
+    var abandoned = false;
+    final open = BluetoothConnection.toAddress(address);
+    final settled = open.then<void>(
+      (connection) {
+        if (abandoned) connection.dispose();
+      },
+      onError: (Object _) {},
+    );
+    _socketOpenInFlight = settled;
+    unawaited(
+      settled.whenComplete(() {
+        if (identical(_socketOpenInFlight, settled)) {
+          _socketOpenInFlight = null;
+        }
+      }),
+    );
+
+    final BluetoothConnection connection;
+    try {
+      connection = await open.timeout(_socketOpenTimeout);
+    } on TimeoutException {
+      abandoned = true;
+      rethrow;
+    }
+    if (token != _connectToken) {
+      connection.dispose();
+      throw const _ConnectCancelled();
+    }
+    return connection;
+  }
+
+  void _throwIfCancelled(int token) {
+    if (token != _connectToken) throw const _ConnectCancelled();
+  }
+
+  void _attachListener(BluetoothConnection connection) {
+    final generation = ++_linkGeneration;
+    connection.input!.listen(
+      (data) {
+        if (generation == _linkGeneration) _onDataReceived(data);
+      },
+      onError: (Object e) => debugPrint('OBD input error: $e'),
+      onDone: () {
+        if (generation == _linkGeneration) _onLinkClosed();
+      },
+    );
+  }
+
+  void _onLinkClosed() {
+    if (state.status == ObdStatus.connected) {
+      _onConnectionLost();
+    } else {
+      // Mid-connect: fail the pending init command now; the connect loop owns
+      // state and decides whether to retry.
+      _disconnectReal();
+    }
+  }
+
+  Future<void> _initElm327(int token) async {
+    // AT Z reboots the chip; clones can take well over a second to return
+    // the prompt, so it gets a longer timeout than the other commands.
+    const steps = <(String, Duration)>[
+      ('AT Z\r', Duration(seconds: 5)),
+      ('AT E0\r', Duration(seconds: 3)),
+      ('AT SP 0\r', Duration(seconds: 3)),
+    ];
     const int maxRetries = 2;
 
-    for (final cmd in initCommands) {
+    for (final (cmd, timeout) in steps) {
       bool success = false;
-      for (int attempt = 0; attempt < maxRetries; attempt++) {
+      for (int attempt = 0; attempt < maxRetries && !success; attempt++) {
+        _throwIfCancelled(token);
         try {
-          await _sendAndAwaitResponse(cmd);
-          if (cmd == 'AT Z\r') {
-            await Future.delayed(const Duration(milliseconds: 500));
-          }
+          await _sendAndAwaitResponse(cmd, timeout: timeout);
           success = true;
-          break;
         } catch (e) {
           debugPrint("Init $cmd attempt ${attempt + 1} failed: $e");
           if (attempt < maxRetries - 1) {
@@ -441,51 +680,101 @@ class ObdService extends StateNotifier<ObdState> {
         }
       }
       if (!success) {
-        throw Exception("Init ELM327 gagal: $cmd");
+        throw Exception("Init ELM327 gagal: ${cmd.trim()}");
+      }
+      if (cmd == 'AT Z\r') {
+        await Future.delayed(const Duration(milliseconds: 500));
+        _rxBuffer.clear();
+      }
+    }
+
+    // With AT SP 0 the first OBD request starts the protocol search, which
+    // takes several seconds on older K-line cars. Running it here, before
+    // polling starts, keeps the poll watchdog from sending a command
+    // mid-search, which makes the ELM327 abort the search. Not fatal: with the
+    // ignition off the car does not answer yet.
+    _throwIfCancelled(token);
+    state = state.copyWith(statusDetail: 'Mendeteksi protokol mobil…');
+    try {
+      await _sendAndAwaitResponse(
+        '0100\r',
+        timeout: const Duration(seconds: 15),
+      );
+    } catch (e) {
+      debugPrint('Protocol warm-up: $e');
+    }
+    _throwIfCancelled(token);
+    if (_connection == null || !_connection!.isConnected) {
+      throw Exception('Connection not active');
+    }
+  }
+
+  Future<String> _sendAndAwaitResponse(
+    String command, {
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final connection = _connection;
+    if (connection == null || !connection.isConnected) {
+      throw Exception("Connection not active");
+    }
+    // Leftovers of an aborted or late response would be prepended otherwise.
+    _rxBuffer.clear();
+    final completer = Completer<String>();
+    _pendingResponseCompleter = completer;
+    final response = completer.future.timeout(timeout);
+    // _disconnectReal can fail the completer before anyone awaits it.
+    unawaited(response.then((_) {}, onError: (Object _) {}));
+    try {
+      connection.output.add(ascii.encode(command));
+      await connection.output.allSent;
+      return await response;
+    } finally {
+      if (identical(_pendingResponseCompleter, completer)) {
+        _pendingResponseCompleter = null;
       }
     }
   }
 
-  Future<String> _sendAndAwaitResponse(String command, {Duration timeout = const Duration(seconds: 3)}) async {
-    if (_connection == null || !_connection!.isConnected) {
-      throw Exception("Connection not active");
+  void disconnect() {
+    if (state.isSimulatorMode) return;
+    if (_isConnectBusy) {
+      cancelConnect();
+      return;
     }
-    _pendingResponseCompleter = Completer<String>();
-    try {
-      _connection!.output.add(utf8.encode(command));
-      await _connection!.output.allSent;
-      return await _pendingResponseCompleter!.future.timeout(timeout);
-    } catch (e) {
-      _pendingResponseCompleter = null;
-      rethrow;
-    }
+    _userRequestedDisconnect = true;
+    _connectToken++;
+    _disconnectReal();
+    state = state.copyWith(
+      status: ObdStatus.disconnected,
+      statusDetail: null,
+      errorMessage: null,
+      errorHelp: null,
+      supportedSensors: const {},
+      checkedSensors: const {},
+    );
+    unawaited(stopBackgroundMonitoring());
   }
 
-  void disconnect() {
-    if (state.isSimulatorMode) {
-      // Keep simulation going
-    } else {
-      _disconnectReal();
-      state = state.copyWith(
-        status: ObdStatus.disconnected,
-        supportedSensors: const {},
-        checkedSensors: const {},
-      );
-    }
+  /// Clears the manual-disconnect latch so auto-reconnect may run again.
+  void allowAutoReconnect() {
+    _userRequestedDisconnect = false;
+    _resetReconnectDelay();
   }
 
   void _disconnectReal() {
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
+    _linkGeneration++;
+    _stopPolling();
     _connection?.dispose();
     _connection = null;
     _rxBuffer.clear();
     _isAwaitingResponse = false;
     _currentCommandIndex = 0;
-    if (_pendingResponseCompleter != null && !_pendingResponseCompleter!.isCompleted) {
-      _pendingResponseCompleter!.completeError(Exception("Disconnected"));
-    }
+    _pollCycleCount = 0;
+    final pending = _pendingResponseCompleter;
     _pendingResponseCompleter = null;
+    if (pending != null && !pending.isCompleted) {
+      pending.completeError(Exception("Disconnected"));
+    }
   }
 
   void _startSimulation() {
@@ -508,56 +797,195 @@ class ObdService extends StateNotifier<ObdState> {
   }
 
   void _startPolling() {
-    _pollingTimer?.cancel();
+    _stopPolling();
+    final connection = _connection;
+    if (connection == null || !connection.isConnected) return;
+    _pollingActive = true;
     _isAwaitingResponse = false;
     _currentCommandIndex = 0;
+    _rxBuffer.clear();
     _sendNextCommand();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (_isAwaitingResponse && _lastActivityTime != null &&
-          DateTime.now().difference(_lastActivityTime!) > Duration(milliseconds: _responseTimeoutMs)) {
-        _isAwaitingResponse = false;
-        _sendNextCommand();
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _pollWatchdog(),
+    );
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _pollingActive = false;
+  }
+
+  void _pollWatchdog() {
+    if (!_pollingActive || !_isAwaitingResponse) return;
+    final last = _lastActivityTime;
+    if (last != null &&
+        DateTime.now().difference(last) <=
+            const Duration(milliseconds: _responseTimeoutMs)) {
+      return;
+    }
+    // Skip the PID that went silent instead of re-sending it forever.
+    _isAwaitingResponse = false;
+    _rxBuffer.clear();
+    _advanceCommandIndex();
+    _sendNextCommand();
+  }
+
+  /// Stops polling and waits for the poll command already on the wire to
+  /// answer, so the next one-shot command does not receive that answer.
+  Future<void> _pausePolling() async {
+    _stopPolling();
+    final deadline = DateTime.now().add(
+      const Duration(milliseconds: _responseTimeoutMs),
+    );
+    while (_isAwaitingResponse &&
+        _connection != null &&
+        DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(milliseconds: 40));
+    }
+    _isAwaitingResponse = false;
+    _rxBuffer.clear();
+  }
+
+  /// Runs one-shot command sequences one at a time with polling paused. The
+  /// ELM327 cannot multiplex: a command sent before the previous `>` prompt
+  /// corrupts both responses.
+  Future<T> _withPollingPaused<T>(Future<T> Function() body) {
+    final run = _exclusiveTail.then((_) async {
+      await _pausePolling();
+      try {
+        return await body();
+      } finally {
+        if (mounted &&
+            state.status == ObdStatus.connected &&
+            !state.isSimulatorMode &&
+            _connection?.isConnected == true) {
+          _startPolling();
+        }
       }
     });
+    _exclusiveTail = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
   }
 
   Future<void> _sendString(String command) async {
-    if (_connection == null || !_connection!.isConnected) return;
-    _connection!.output.add(utf8.encode(command));
-    await _connection!.output.allSent;
+    final connection = _connection;
+    if (connection == null || !connection.isConnected) return;
+    try {
+      connection.output.add(ascii.encode(command));
+      await connection.output.allSent;
+    } catch (e) {
+      debugPrint('OBD send failed: $e');
+    }
+  }
+
+  String _commandAtIndex(int index) {
+    if (index < _pendingCommands.length) {
+      return _pendingCommands[index];
+    }
+    // Sparse DTC slot appended after a full live-PID cycle.
+    return '03';
+  }
+
+  int get _commandsPerCycle {
+    final includeDtc =
+        _pollCycleCount > 0 && _pollCycleCount % _dtcPollEveryNCycles == 0;
+    return _pendingCommands.length + (includeDtc ? 1 : 0);
+  }
+
+  void _advanceCommandIndex() {
+    _currentCommandIndex++;
+    if (_currentCommandIndex >= _commandsPerCycle) {
+      _currentCommandIndex = 0;
+      _pollCycleCount++;
+    }
   }
 
   void _sendNextCommand() {
-    if (_isAwaitingResponse) return;
+    if (!_pollingActive || _isAwaitingResponse) return;
     if (_pendingCommands.isEmpty) return;
-    final cmd = _pendingCommands[_currentCommandIndex];
+    final cmd = _commandAtIndex(_currentCommandIndex);
     _isAwaitingResponse = true;
     _lastActivityTime = DateTime.now();
-    _sendString("$cmd\r");
+    unawaited(_sendString('$cmd\r'));
   }
 
+  /// ELM327 clones emit stray non-ASCII bytes, notably around AT Z. Only
+  /// printable ASCII plus CR/LF is kept, so one bad byte cannot throw away a
+  /// chunk that carries the `>` prompt.
+  static bool _isElmByte(int b) =>
+      b == 0x0A || b == 0x0D || (b >= 0x20 && b < 0x7F);
+
   void _onDataReceived(Uint8List data) {
-    final text = utf8.decode(data);
+    final text = String.fromCharCodes(data.where(_isElmByte));
+    if (text.isEmpty) return;
     _rxBuffer.write(text);
+    _lastActivityTime = DateTime.now();
 
-    if (_isAwaitingResponse) {
-      _lastActivityTime = DateTime.now();
+    if (!text.contains('>')) return;
+
+    final fullResponse = _rxBuffer.toString();
+    _rxBuffer.clear();
+    _isAwaitingResponse = false;
+
+    final completer = _pendingResponseCompleter;
+    if (completer != null && !completer.isCompleted) {
+      _pendingResponseCompleter = null;
+      completer.complete(fullResponse);
+      return;
     }
 
-    if (text.contains('>')) {
-      final fullResponse = _rxBuffer.toString();
-      _rxBuffer.clear();
-      _isAwaitingResponse = false;
+    // No owner: a late answer to a timed-out one-shot command, or a poll
+    // answer that arrived after polling paused. Parsing it would attribute it
+    // to the wrong command.
+    if (!_pollingActive) return;
 
-      if (_pendingResponseCompleter != null && !_pendingResponseCompleter!.isCompleted) {
-        _pendingResponseCompleter!.complete(fullResponse);
-        _pendingResponseCompleter = null;
-      } else {
-        _parseResponse(_pendingCommands[_currentCommandIndex], fullResponse);
-        _currentCommandIndex = (_currentCommandIndex + 1) % _pendingCommands.length;
-        _sendNextCommand();
-      }
+    _parseResponse(_commandAtIndex(_currentCommandIndex), fullResponse);
+    _advanceCommandIndex();
+    _sendNextCommand();
+  }
+
+  static ({String message, String help}) _describeConnectFailure(
+    Object error,
+    String deviceName,
+  ) {
+    final raw = error.toString();
+    final err = raw.toLowerCase();
+    final detail = raw.length > 180 ? '${raw.substring(0, 180)}…' : raw;
+
+    if (err.contains('init elm327')) {
+      return (
+        message: 'Adapter tersambung, tetapi tidak menjawab perintah ELM327.',
+        help: '1. Cabut dongle selama 10 detik, lalu pasang kembali.\n'
+            '2. Pastikan perangkat yang dipilih adalah adapter OBD-II ELM327, '
+            'bukan perangkat Bluetooth lain.\n\n'
+            'Detail teknis: $detail',
+      );
     }
+    if (error is TimeoutException ||
+        err.contains('read failed') ||
+        err.contains('socket might closed') ||
+        err.contains('timeout') ||
+        err.contains('connection failed')) {
+      return (
+        message: '$deviceName tidak merespons.',
+        help: '1. Pastikan dongle terpasang dan kunci kontak ON '
+            '(lampu dongle menyala).\n'
+            '2. Tutup paksa aplikasi OBD lain (Torque, Car Scanner, dll). '
+            'Dongle hanya bisa dipakai satu aplikasi.\n'
+            '3. Cabut dongle selama 10 detik, lalu pasang kembali.\n'
+            '4. Jika masih gagal, lupakan perangkat di Pengaturan Bluetooth HP '
+            'lalu sandingkan ulang (PIN biasanya 1234 atau 0000).\n\n'
+            'Detail teknis: $detail',
+      );
+    }
+    return (
+      message: 'Gagal terhubung ke $deviceName.',
+      help: 'Coba lagi beberapa saat. Jika terus gagal, cabut dongle 10 detik '
+          'lalu pasang kembali.\n\n'
+          'Detail teknis: $detail',
+    );
   }
 
   void _parseResponse(String command, String response) {
@@ -751,10 +1179,6 @@ class ObdService extends StateNotifier<ObdState> {
     }
 
     // REAL ELM327 BLUETOOTH ECU SCAN
-    // Temporarily pause background telemetry polling timer during diagnostic scan to avoid command collisions!
-    _pollingTimer?.cancel();
-    _isAwaitingResponse = false;
-
     String protocol = 'ISO 15765-4 (CAN 11bit)';
     String vin = 'Tidak Dilaporkan ECU';
     int supportedPids = 0;
@@ -764,7 +1188,7 @@ class ObdService extends StateNotifier<ObdState> {
     Map<String, bool> readiness = {};
     double? odometerKm;
 
-    try {
+    await _withPollingPaused(() async {
       // Step 1: Detect Protocol
       onProgress?.call(0.15, 'Mendeteksi Protokol Komunikasi ECU...');
       try {
@@ -847,10 +1271,7 @@ class ObdService extends StateNotifier<ObdState> {
       state = state.copyWith(
         telemetry: state.telemetry.copyWith(dtcs: activeDtcs),
       );
-    } finally {
-      // Resume background telemetry polling
-      _startPolling();
-    }
+    });
 
     final isMilOn = readiness['mil'] ?? activeDtcs.isNotEmpty;
     final totalSensorsCount = supportedPids > 1
@@ -859,7 +1280,7 @@ class ObdService extends StateNotifier<ObdState> {
             ? state.supportedSensors.length
             : (state.checkedSensors.isNotEmpty ? state.checkedSensors.length : 12));
 
-    if (VinDecoder.isValidVin(vin) || (odometerKm != null && odometerKm > 0)) {
+    if (VinDecoder.isValidVin(vin) || ((odometerKm ?? 0) > 0)) {
       unawaited(
         _ref.read(settingsProvider.notifier).applyEcuVehicleIdentity(
               vin: VinDecoder.isValidVin(vin) ? vin : null,
@@ -906,12 +1327,17 @@ class ObdService extends StateNotifier<ObdState> {
       );
     }
 
-    _pollingTimer?.cancel();
-    _isAwaitingResponse = false;
+    // The init sequence owns the link until the status reaches connected.
+    if (state.status != ObdStatus.connected) {
+      return const EcuVehicleIdentityResult(
+        success: false,
+        message: 'Tunggu hingga OBD-II selesai terhubung, lalu coba lagi.',
+      );
+    }
 
     String? vin;
     double? odometer;
-    try {
+    await _withPollingPaused(() async {
       try {
         final vinResp = await _sendAndAwaitResponse(
           '0902\r',
@@ -936,12 +1362,10 @@ class ObdService extends StateNotifier<ObdState> {
       } catch (e) {
         debugPrint('fetchVehicleIdentity odometer: $e');
       }
-    } finally {
-      _startPolling();
-    }
+    });
 
     final hasVin = VinDecoder.isValidVin(vin);
-    final hasOdo = odometer != null && odometer > 0;
+    final hasOdo = (odometer ?? 0) > 0;
     if (!hasVin && !hasOdo) {
       return const EcuVehicleIdentityResult(
         success: false,
@@ -976,7 +1400,12 @@ class ObdService extends StateNotifier<ObdState> {
       );
     } else {
       try {
-        await _sendAndAwaitResponse('04\r', timeout: const Duration(seconds: 5));
+        await _withPollingPaused(
+          () => _sendAndAwaitResponse(
+            '04\r',
+            timeout: const Duration(seconds: 5),
+          ),
+        );
         state = state.copyWith(
           telemetry: state.telemetry.copyWith(dtcs: []),
         );
@@ -1008,28 +1437,31 @@ class ObdService extends StateNotifier<ObdState> {
     return true;
   }
 
-  void _onConnectionLost(String reason) {
+  void _onConnectionLost() {
     _disconnectReal();
     state = state.copyWith(
       status: ObdStatus.error,
-      errorMessage: reason,
+      statusDetail: null,
+      errorMessage: 'Koneksi ke adapter OBD terputus.',
+      errorHelp: 'Pastikan dongle masih terpasang dan kunci kontak ON. '
+          'Jika "Sambung otomatis" aktif, aplikasi akan mencoba menyambung '
+          'ulang sendiri.',
     );
+    unawaited(stopBackgroundMonitoring());
   }
 
   @override
   void dispose() {
     _autoReconnectTimer?.cancel();
     _autoReconnectTimer = null;
+    _connectToken++;
     _stopSimulation();
     _disconnectReal();
+    unawaited(stopBackgroundMonitoring());
     super.dispose();
   }
 }
 
 final obdServiceProvider = StateNotifierProvider<ObdService, ObdState>((ref) {
   return ObdService(ref);
-});
-
-final pairedDevicesProvider = FutureProvider.autoDispose<List<BluetoothDevice>>((ref) async {
-  return ref.read(obdServiceProvider.notifier).getPairedDevices();
 });

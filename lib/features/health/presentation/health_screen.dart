@@ -52,7 +52,8 @@ class HealthScreen extends ConsumerWidget {
 
     // Listen to trip completion to show summary dialog
     ref.listen(tripRecorderProvider, (previous, next) {
-      if (previous?.lastCompletedTripId == null && next.lastCompletedTripId != null) {
+      if (previous?.lastCompletedTripId == null &&
+          next.lastCompletedTripId != null) {
         _showTripSummaryDialog(context, ref, next.lastCompletedTripId!);
       }
     });
@@ -63,7 +64,10 @@ class HealthScreen extends ConsumerWidget {
       }
     });
 
-    ref.listen(healthProvider.select((h) => h.warnings.length), (previous, next) {
+    ref.listen(healthProvider.select((h) => h.warnings.length), (
+      previous,
+      next,
+    ) {
       if (previous != null && next > previous) {
         HapticFeedback.mediumImpact();
       }
@@ -80,7 +84,10 @@ class HealthScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(
           vehicleName.toUpperCase(),
-          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
@@ -94,7 +101,7 @@ class HealthScreen extends ConsumerWidget {
                   : AppColors.textSecondary,
             ),
             onPressed: () => showObdConnectionSheet(context, ref),
-          )
+          ),
         ],
       ),
       body: SafeArea(
@@ -102,73 +109,76 @@ class HealthScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Connection Status Banner
-            _buildConnectionBanner(context, ref, obdStateLite),
-            const SizedBox(height: 16),
+            children: [
+              // Connection Status Banner
+              _buildConnectionBanner(context, ref, obdStateLite),
+              const SizedBox(height: 16),
 
-            // Health Score Ring Card
-            _buildHealthHero(context, healthReport),
-            const SizedBox(height: 16),
+              // Health Score Ring Card
+              _buildHealthHero(context, healthReport),
+              const SizedBox(height: 16),
 
-            // Diagnostic Scanner Banner Button
-            _buildDiagnosticScannerCard(
-              context,
-              dtcCount: dtcCount,
-              dtcCodes: dtcCodes.isEmpty ? const [] : dtcCodes.split(','),
-            ),
-            const SizedBox(height: 20),
-
-            // Live Trip Recording Active Banner
-            if (tripState.isRecording) ...[
-              _buildLiveTripRecordingCard(tripState, liveSpeed, liveRpm),
+              // Diagnostic Scanner Banner Button
+              _buildDiagnosticScannerCard(
+                context,
+                dtcCount: dtcCount,
+                dtcCodes: dtcCodes.isEmpty ? const [] : dtcCodes.split(','),
+              ),
               const SizedBox(height: 20),
-            ],
 
-            // Actionable Alerts / Warnings
-            if (healthReport.warnings.isNotEmpty) ...[
+              // Live Trip Recording Active Banner
+              if (tripState.isRecording) ...[
+                _buildLiveTripRecordingCard(tripState, liveSpeed, liveRpm),
+                const SizedBox(height: 20),
+              ],
+
+              // Actionable Alerts / Warnings
+              if (healthReport.warnings.isNotEmpty) ...[
+                const Text(
+                  'Perhatian',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                ...healthReport.warnings.map(
+                  (warning) => _buildWarningCard(context, warning),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // Systems Checklist
               const Text(
-                'Perhatian',
+                'Pemeriksaan Sistem',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 8),
-              ...healthReport.warnings.map((warning) => _buildWarningCard(context, warning)),
+              _buildChecksCard(healthReport.checks),
               const SizedBox(height: 20),
-            ],
 
-            // Systems Checklist
-            const Text(
-              'Pemeriksaan Sistem',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(height: 8),
-            _buildChecksCard(healthReport.checks),
-            const SizedBox(height: 20),
-
-            // Last Trip Summary (if trip recording is NOT active)
-            if (!tripState.isRecording) ...[
-              const Text(
-                'Perjalanan Terakhir',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              const SizedBox(height: 8),
-              historicalTrips.when(
-                data: (trips) {
-                  if (trips.isEmpty) {
-                    return _buildEmptyTripCard();
-                  }
-                  final lastTrip = trips.first;
-                  return _buildLastTripCard(context, lastTrip, ref);
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => Text('Gagal memuat perjalanan: $e'),
-              ),
+              // Last Trip Summary (if trip recording is NOT active)
+              if (!tripState.isRecording) ...[
+                const Text(
+                  'Perjalanan Terakhir',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 8),
+                historicalTrips.when(
+                  data: (trips) {
+                    if (trips.isEmpty) {
+                      return _buildEmptyTripCard();
+                    }
+                    final lastTrip = trips.first;
+                    return _buildLastTripCard(context, lastTrip, ref);
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Text('Gagal memuat perjalanan: $e'),
+                ),
+              ],
+              const SizedBox(height: 24),
             ],
-            const SizedBox(height: 24),
-          ],
+          ),
         ),
       ),
-     ),
     );
   }
 
@@ -211,11 +221,16 @@ class HealthScreen extends ConsumerWidget {
       onTap: () => showObdConnectionSheet(context, ref),
       borderRadius: AppBorderRadius.mdBorder,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm + 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm + 2,
+        ),
         decoration: BoxDecoration(
           color: bannerColor,
           borderRadius: AppBorderRadius.mdBorder,
-          border: Border.all(color: _getStatusColor(obdState.status).withOpacity(0.2)),
+          border: Border.all(
+            color: _getStatusColor(obdState.status).withOpacity(0.2),
+          ),
         ),
         child: Row(
           children: [
@@ -224,6 +239,8 @@ class HealthScreen extends ConsumerWidget {
             Expanded(
               child: Text(
                 bannerText,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
@@ -231,7 +248,11 @@ class HealthScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, color: _getStatusColor(obdState.status).withOpacity(0.5), size: 12),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: _getStatusColor(obdState.status).withOpacity(0.5),
+              size: 12,
+            ),
           ],
         ),
       ),
@@ -343,7 +364,9 @@ class HealthScreen extends ConsumerWidget {
       color: hasDtcs ? AppColors.danger.withOpacity(0.12) : AppColors.surface,
       shape: RoundedRectangleBorder(
         side: BorderSide(
-          color: hasDtcs ? AppColors.danger.withOpacity(0.5) : AppColors.primary.withOpacity(0.3),
+          color: hasDtcs
+              ? AppColors.danger.withOpacity(0.5)
+              : AppColors.primary.withOpacity(0.3),
           width: 1,
         ),
         borderRadius: BorderRadius.circular(18),
@@ -358,7 +381,9 @@ class HealthScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: hasDtcs ? AppColors.danger.withOpacity(0.2) : AppColors.primary.withOpacity(0.15),
+                  color: hasDtcs
+                      ? AppColors.danger.withOpacity(0.2)
+                      : AppColors.primary.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -376,19 +401,29 @@ class HealthScreen extends ConsumerWidget {
                       children: [
                         const Text(
                           'Pindai Diagnostik ECU',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
                         ),
                         if (hasDtcs) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.danger,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '$dtcCount DTC',
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -399,7 +434,10 @@ class HealthScreen extends ConsumerWidget {
                       hasDtcs
                           ? 'Terdeteksi kode kesalahan aktif! Ketuk untuk diagnosa & reset.'
                           : 'Periksa DTC, status emisi (I/M Readiness), dan reset Check Engine.',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -440,26 +478,38 @@ class HealthScreen extends ConsumerWidget {
                 const Expanded(
                   child: Text(
                     'SEDANG MEREKAM PERJALANAN',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 11, letterSpacing: 1),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      letterSpacing: 1,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   _formatDuration(trip.durationSeconds),
-                  style: AppTheme.numberStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold),
-                )
+                  style: AppTheme.numberStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildTripLiveStat('Jarak', '${trip.currentTripDistance.toStringAsFixed(1)} km'),
+                _buildTripLiveStat(
+                  'Jarak',
+                  '${trip.currentTripDistance.toStringAsFixed(1)} km',
+                ),
                 _buildTripLiveStat('Speed', '${speed.toStringAsFixed(0)} km/h'),
-                _buildTripLiveStat('RPM', '${rpm.toStringAsFixed(0)}'),
+                _buildTripLiveStat('RPM', rpm.toStringAsFixed(0)),
               ],
-            )
+            ),
           ],
         ),
       ),
@@ -469,9 +519,18 @@ class HealthScreen extends ConsumerWidget {
   Widget _buildTripLiveStat(String label, String value) {
     return Column(
       children: [
-        Text(value, style: AppTheme.numberStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: AppTheme.numberStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
       ],
     );
   }
@@ -500,7 +559,11 @@ class HealthScreen extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 24),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.danger,
+                size: 24,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -508,7 +571,11 @@ class HealthScreen extends ConsumerWidget {
                   children: [
                     Text(
                       text,
-                      style: const TextStyle(fontSize: 13, color: AppColors.textPrimary, height: 1.3),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                        height: 1.3,
+                      ),
                     ),
                     if (route != null) ...[
                       const SizedBox(height: 4),
@@ -525,7 +592,11 @@ class HealthScreen extends ConsumerWidget {
                 ),
               ),
               if (route != null)
-                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.primary),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 12,
+                  color: AppColors.primary,
+                ),
             ],
           ),
         ),
@@ -541,7 +612,8 @@ class HealthScreen extends ConsumerWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: checks.length,
-          separatorBuilder: (context, index) => const Divider(color: AppColors.surface, height: 1),
+          separatorBuilder: (context, index) =>
+              const Divider(color: AppColors.surface, height: 1),
           itemBuilder: (context, index) {
             final check = checks[index];
             return Padding(
@@ -549,7 +621,9 @@ class HealthScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   Icon(
-                    check.isOk ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                    check.isOk
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
                     color: check.isOk ? AppColors.success : AppColors.danger,
                     size: 20,
                   ),
@@ -557,7 +631,10 @@ class HealthScreen extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       check.title,
-                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -566,8 +643,12 @@ class HealthScreen extends ConsumerWidget {
                     check.detail,
                     style: AppTheme.numberStyle(
                       fontSize: 13,
-                      color: check.isOk ? AppColors.textSecondary : AppColors.danger,
-                      fontWeight: check.isOk ? FontWeight.normal : FontWeight.bold,
+                      color: check.isOk
+                          ? AppColors.textSecondary
+                          : AppColors.danger,
+                      fontWeight: check.isOk
+                          ? FontWeight.normal
+                          : FontWeight.bold,
                     ),
                   ),
                 ],
@@ -604,17 +685,27 @@ class HealthScreen extends ConsumerWidget {
                 children: [
                   Text(
                     formattedTime,
-                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.success.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'Score ${trip.tripHealthScore}',
-                      style: const TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.success,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -633,7 +724,11 @@ class HealthScreen extends ConsumerWidget {
                 alignment: Alignment.centerRight,
                 child: Text(
                   'Ketuk untuk lihat di Linimasa',
-                  style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -650,7 +745,11 @@ class HealthScreen extends ConsumerWidget {
         child: Center(
           child: Column(
             children: [
-              Icon(Icons.directions_car_outlined, size: 40, color: AppColors.textSecondary),
+              Icon(
+                Icons.directions_car_outlined,
+                size: 40,
+                color: AppColors.textSecondary,
+              ),
               SizedBox(height: 12),
               Text(
                 'Belum ada data perjalanan',
@@ -668,7 +767,11 @@ class HealthScreen extends ConsumerWidget {
       children: [
         Text(
           value,
-          style: AppTheme.numberStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          style: AppTheme.numberStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -685,9 +788,15 @@ class HealthScreen extends ConsumerWidget {
     return '$m:$s';
   }
 
-  void _showTripSummaryDialog(BuildContext context, WidgetRef ref, int tripId) async {
+  void _showTripSummaryDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int tripId,
+  ) async {
     final db = ref.read(databaseProvider);
-    final trip = await (db.select(db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+    final trip = await (db.select(
+      db.trips,
+    )..where((t) => t.id.equals(tripId))).getSingleOrNull();
     if (trip == null) return;
 
     ref.read(tripRecorderProvider.notifier).clearLastCompletedTrip();
@@ -703,7 +812,12 @@ class HealthScreen extends ConsumerWidget {
       isScrollControlled: true,
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.xxl, AppSpacing.xl, AppSpacing.xxl + 12),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.xxl,
+            AppSpacing.xl,
+            AppSpacing.xxl + 12,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -716,11 +830,19 @@ class HealthScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              const Icon(Icons.stars_rounded, color: AppColors.success, size: 48),
+              const Icon(
+                Icons.stars_rounded,
+                color: AppColors.success,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               const Text(
                 'Trip Selesai!',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: AppColors.textPrimary),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const SizedBox(height: 4),
               const Text(
@@ -728,7 +850,7 @@ class HealthScreen extends ConsumerWidget {
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 24),
-              
+
               // Statistics Grid
               Container(
                 padding: const EdgeInsets.all(20),
@@ -741,16 +863,28 @@ class HealthScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildDialogStat('Jarak', '${trip.distance.toStringAsFixed(1)} km'),
-                        _buildDialogStat('Durasi', '${trip.durationMinutes} menit'),
+                        _buildDialogStat(
+                          'Jarak',
+                          '${trip.distance.toStringAsFixed(1)} km',
+                        ),
+                        _buildDialogStat(
+                          'Durasi',
+                          '${trip.durationMinutes} menit',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _buildDialogStat('Avg Speed', '${trip.avgSpeed.toStringAsFixed(0)} km/h'),
-                        _buildDialogStat('Konsumsi', '${trip.fuelEconomy.toStringAsFixed(1)} km/L'),
+                        _buildDialogStat(
+                          'Avg Speed',
+                          '${trip.avgSpeed.toStringAsFixed(0)} km/h',
+                        ),
+                        _buildDialogStat(
+                          'Konsumsi',
+                          '${trip.fuelEconomy.toStringAsFixed(1)} km/L',
+                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -772,11 +906,16 @@ class HealthScreen extends ConsumerWidget {
                 child: FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: const Text(
+                    'Tutup',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
               ),
             ],
@@ -790,9 +929,19 @@ class HealthScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
         const SizedBox(height: 4),
-        Text(value, style: AppTheme.numberStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        Text(
+          value,
+          style: AppTheme.numberStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ],
     );
   }
@@ -841,9 +990,10 @@ class _RecordingPulseDotState extends State<_RecordingPulseDot>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.35, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      ),
+      opacity: Tween<double>(
+        begin: 0.35,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
       child: const Icon(Icons.circle, color: AppColors.danger, size: 10),
     );
   }

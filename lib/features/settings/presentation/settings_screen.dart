@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/widgets/obd_connection_sheet.dart';
 import 'settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -18,12 +19,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
-    final obdStatus = ref.watch(obdServiceProvider.select((s) => s.status));
-    final connectedDeviceAddress = ref.watch(
-      obdServiceProvider.select((s) => s.connectedDeviceAddress),
-    );
 
+    // ObdState changes many times per second while polling, so only status
+    // transitions may raise a snackbar.
     ref.listen<ObdState>(obdServiceProvider, (previous, next) {
+      if (next.status == previous?.status) return;
       if (next.status == ObdStatus.error && next.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -32,8 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             behavior: SnackBarBehavior.floating,
           ),
         );
-      } else if (next.status == ObdStatus.connected &&
-          previous?.status != ObdStatus.connected) {
+      } else if (next.status == ObdStatus.connected && !next.isSimulatorMode) {
         HapticFeedback.lightImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -65,34 +64,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _buildSectionHeader('Mode Koneksi'),
             Card(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   secondary: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: settings.isSimulatorMode 
+                      color: settings.isSimulatorMode
                           ? AppColors.warning.withOpacity(0.15)
                           : AppColors.primary.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      settings.isSimulatorMode ? Icons.science_rounded : Icons.bluetooth_connected_rounded,
-                      color: settings.isSimulatorMode ? AppColors.warning : AppColors.primary,
+                      settings.isSimulatorMode
+                          ? Icons.science_rounded
+                          : Icons.bluetooth_connected_rounded,
+                      color: settings.isSimulatorMode
+                          ? AppColors.warning
+                          : AppColors.primary,
                     ),
                   ),
                   title: Text(
-                    settings.isSimulatorMode ? 'Mode Simulator (Demo)' : 'Mode Bluetooth OBD-II',
+                    settings.isSimulatorMode
+                        ? 'Mode Simulator (Demo)'
+                        : 'Mode Bluetooth OBD-II',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    settings.isSimulatorMode 
+                    settings.isSimulatorMode
                         ? 'Sensor simulasi aktif (Uji coba tanpa adapter OBD).'
                         : 'Terhubung ke scanner Bluetooth fisik mobil (Default).',
                     style: const TextStyle(fontSize: 12),
                   ),
                   value: settings.isSimulatorMode,
-                  activeColor: AppColors.warning,
+                  activeThumbColor: AppColors.warning,
                   onChanged: (val) {
                     ref.read(settingsProvider.notifier).setSimulatorMode(val);
                   },
@@ -106,16 +114,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _buildSectionHeader('Pengaturan Simulator Demo'),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   child: Column(
                     children: [
                       SwitchListTile(
                         title: const Text('Kontak / Mesin Menyala'),
-                        subtitle: const Text('Mengontrol RPM dan indikator hidup'),
+                        subtitle: const Text(
+                          'Mengontrol RPM dan indikator hidup',
+                        ),
                         value: settings.isIgnitionOn,
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
                         onChanged: (val) {
-                          ref.read(settingsProvider.notifier).setIgnitionOn(val);
+                          ref
+                              .read(settingsProvider.notifier)
+                              .setIgnitionOn(val);
                         },
                       ),
                       const Divider(color: AppColors.surface, height: 1),
@@ -164,106 +179,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             if (!settings.isSimulatorMode) ...[
               _buildSectionHeader('Koneksi Bluetooth OBD-II'),
               Card(
-                child: ref.watch(pairedDevicesProvider).when(
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (err, stack) => Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 36),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Gagal memuat Bluetooth: $err',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
+                child: Column(
+                  children: [
+                    _ObdLinkSummaryTile(
+                      onManage: () => showObdConnectionSheet(context, ref),
                     ),
-                  ),
-                  data: (devices) {
-                    if (devices.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          children: [
-                            const Icon(Icons.bluetooth_searching_rounded, color: AppColors.textSecondary, size: 36),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Tidak ada perangkat Bluetooth berpasangan.',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Sandingkan ELM327 Anda terlebih dahulu di pengaturan Android.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: devices.length,
-                      separatorBuilder: (context, index) => const Divider(color: AppColors.surface, height: 1),
-                      itemBuilder: (context, index) {
-                        final device = devices[index];
-                        final isConnected = connectedDeviceAddress == device.address && 
-                                             obdStatus == ObdStatus.connected;
-                        final isConnecting = connectedDeviceAddress == device.address && 
-                                             (obdStatus == ObdStatus.connecting || 
-                                              obdStatus == ObdStatus.initializing);
-                        final isAnyConnecting = obdStatus == ObdStatus.connecting || 
-                                                obdStatus == ObdStatus.initializing;
-
-                        return ListTile(
-                          leading: Icon(
-                            Icons.bluetooth_rounded, 
-                            color: isConnected 
-                                ? AppColors.success 
-                                : (isConnecting ? AppColors.primary : AppColors.textSecondary)
-                          ),
-                          title: Text(device.name ?? 'Perangkat Tanpa Nama'),
-                          subtitle: Text(device.address),
-                          trailing: isConnected
-                              ? OutlinedButton(
-                                  style: OutlinedButton.styleFrom(
-                                    side: const BorderSide(color: AppColors.danger),
-                                    foregroundColor: AppColors.danger,
-                                  ),
-                                  onPressed: () => ref.read(obdServiceProvider.notifier).disconnect(),
-                                  child: const Text('Putus'),
-                                )
-                              : isConnecting
-                                  ? FilledButton(
-                                      onPressed: null,
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: AppColors.primary.withOpacity(0.15),
-                                      ),
-                                      child: const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                                        ),
-                                      ),
-                                    )
-                                  : FilledButton(
-                                      onPressed: isAnyConnecting
-                                          ? null
-                                          : () => ref.read(obdServiceProvider.notifier).connectToDevice(device),
-                                      child: const Text('Hubungkan'),
-                                    ),
-                        );
-                      },
-                    );
-                  },
+                    const Divider(color: AppColors.surface, height: 1),
+                    SwitchListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                      ),
+                      title: const Text('Sambung otomatis'),
+                      subtitle: const Text(
+                        'Sambungkan ke adapter terakhir saat aplikasi dibuka '
+                        'atau koneksi terputus.',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      value: settings.autoConnectOBD,
+                      activeThumbColor: AppColors.primary,
+                      onChanged: (val) => ref
+                          .read(settingsProvider.notifier)
+                          .setAutoConnectOBD(val),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -330,7 +268,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       subtitle: const Text(
                         'Dari ECU (PID 01A6) bila didukung, atau isi manual',
-                        style: TextStyle(fontSize: 11, color: AppColors.success),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.success,
+                        ),
                       ),
                       onTap: () => _showEditDialog(
                         context,
@@ -412,8 +353,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     EcuVehicleIdentityResult result;
     try {
-      result =
-          await ref.read(settingsProvider.notifier).syncVehicleIdentityFromEcu();
+      result = await ref
+          .read(settingsProvider.notifier)
+          .syncVehicleIdentityFromEcu();
     } catch (e) {
       result = EcuVehicleIdentityResult(
         success: false,
@@ -428,8 +370,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(result.message),
-        backgroundColor:
-            result.success ? AppColors.success : AppColors.danger,
+        backgroundColor: result.success ? AppColors.success : AppColors.danger,
       ),
     );
   }
@@ -439,7 +380,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       padding: const EdgeInsets.only(left: 8.0, bottom: 8.0, top: 16.0),
       child: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primary, letterSpacing: 1.2),
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+          color: AppColors.primary,
+          letterSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -454,17 +400,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: Text(title),
       subtitle: Text(subtitle),
       value: value,
-      activeColor: AppColors.danger,
+      activeThumbColor: AppColors.danger,
       onChanged: onChanged,
     );
   }
 
   Widget _buildProfileEditRow(
-    BuildContext context, 
-    String label, 
-    String value, 
+    BuildContext context,
+    String label,
+    String value,
     Function(String) onSave, {
-    bool isNumber = false
+    bool isNumber = false,
   }) {
     return ListTile(
       title: Text(label, style: const TextStyle(fontSize: 14)),
@@ -480,19 +426,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: AppColors.textSecondary,
+          ),
         ],
       ),
-      onTap: () => _showEditDialog(context, label, value.replaceAll(' km', ''), onSave, isNumber),
+      onTap: () => _showEditDialog(
+        context,
+        label,
+        value.replaceAll(' km', ''),
+        onSave,
+        isNumber,
+      ),
     );
   }
 
   void _showEditDialog(
-    BuildContext context, 
-    String label, 
-    String currentValue, 
+    BuildContext context,
+    String label,
+    String currentValue,
     Function(String) onSave,
-    bool isNumber
+    bool isNumber,
   ) {
     final controller = TextEditingController(text: currentValue);
     showDialog(
@@ -504,14 +459,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           content: TextField(
             controller: controller,
             keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-            decoration: InputDecoration(
-              labelText: label,
-            ),
+            decoration: InputDecoration(labelText: label),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             FilledButton(
               onPressed: () {
@@ -525,6 +481,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+/// One-line OBD link status for Settings; device choice, pairing and
+/// troubleshooting live in the shared connection sheet.
+class _ObdLinkSummaryTile extends ConsumerWidget {
+  final VoidCallback onManage;
+
+  const _ObdLinkSummaryTile({required this.onManage});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final link = ref.watch(
+      obdServiceProvider.select(
+        (s) => (
+          status: s.status,
+          name: s.connectedDeviceName,
+          address: s.connectedDeviceAddress,
+          detail: s.statusDetail,
+          error: s.errorMessage,
+        ),
+      ),
+    );
+    final lastAddress = ref.watch(
+      settingsProvider.select((s) => s.lastOBDAddress),
+    );
+
+    final Color color;
+    final IconData icon;
+    final String title;
+    final String subtitle;
+    switch (link.status) {
+      case ObdStatus.connected:
+        color = AppColors.success;
+        icon = Icons.bluetooth_connected_rounded;
+        title = 'Terhubung ke ${link.name ?? "OBD-II"}';
+        subtitle = link.address ?? '';
+      case ObdStatus.connecting:
+      case ObdStatus.initializing:
+        color = AppColors.primary;
+        icon = Icons.bluetooth_searching_rounded;
+        title = 'Menghubungkan ke ${link.name ?? "OBD-II"}…';
+        subtitle = link.detail ?? '';
+      case ObdStatus.error:
+        color = AppColors.danger;
+        icon = Icons.error_outline_rounded;
+        title = link.error ?? 'Koneksi gagal';
+        subtitle = 'Ketuk Kelola untuk langkah perbaikan.';
+      case ObdStatus.disconnected:
+        color = AppColors.textSecondary;
+        icon = Icons.bluetooth_disabled_rounded;
+        title = 'Belum terhubung';
+        subtitle = lastAddress.isEmpty
+            ? 'Pilih atau sandingkan adapter ELM327.'
+            : 'Adapter terakhir: $lastAddress';
+    }
+
+    return ListTile(
+      onTap: onManage,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(
+        title,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: subtitle.isEmpty
+          ? null
+          : Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: FilledButton.tonal(
+        onPressed: onManage,
+        child: const Text('Kelola'),
+      ),
     );
   }
 }

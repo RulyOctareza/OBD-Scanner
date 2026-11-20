@@ -34,7 +34,9 @@ dependencies:
   fl_chart: ^0.68.0
 
   # Bluetooth Classic (SPP)
-  flutter_bluetooth_serial: ^0.4.0
+  # Vendored with Android patches, see packages/flutter_bluetooth_serial/LOCAL_CHANGES.md.
+  flutter_bluetooth_serial:
+    path: packages/flutter_bluetooth_serial
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^20.1.0
   geolocator: ^14.0.2
