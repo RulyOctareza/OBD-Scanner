@@ -13,7 +13,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- Android 13+: lets the user see the connected-link notification. -->
+    <!-- Android 13+: the link notification shows only once the user grants this;
+         the foreground service runs either way. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application

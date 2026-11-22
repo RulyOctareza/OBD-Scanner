@@ -26,4 +26,11 @@ class MainActivity : FlutterActivity() {
                 }
             }
     }
+
+    override fun onDestroy() {
+        // The Dart side (and the OBD link) ends with this activity's engine;
+        // a configuration change recreates it, so the service stays then.
+        if (!isChangingConfigurations) ObdLinkService.stop(applicationContext)
+        super.onDestroy()
+    }
 }

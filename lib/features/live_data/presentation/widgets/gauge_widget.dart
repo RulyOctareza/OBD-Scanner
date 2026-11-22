@@ -28,6 +28,11 @@ class _GaugeWidgetState extends State<GaugeWidget>
     with SingleTickerProviderStateMixin {
   double _peakValue = 0.0;
   late final AnimationController _controller;
+
+  /// One curve for every animation: a CurvedAnimation registers a status
+  /// listener on the controller until disposed, so one per value change
+  /// would pile up listeners for as long as the gauge lives.
+  late final CurvedAnimation _curve;
   Animation<double> _animation = const AlwaysStoppedAnimation(0);
 
   /// The displayed (animated) value. The dial and the readout listen to it,
@@ -50,6 +55,7 @@ class _GaugeWidgetState extends State<GaugeWidget>
       vsync: this,
       duration: const Duration(milliseconds: 220),
     )..addListener(() => _show(_animation.value));
+    _curve = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
   }
 
   void _show(double displayValue) {
@@ -100,12 +106,13 @@ class _GaugeWidgetState extends State<GaugeWidget>
     _animation = Tween<double>(
       begin: previousDisplayed,
       end: currentValue,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    ).animate(_curve);
     _controller.forward(from: 0.0);
   }
 
   @override
   void dispose() {
+    _curve.dispose();
     _controller.dispose();
     _shown.dispose();
     _warning.dispose();

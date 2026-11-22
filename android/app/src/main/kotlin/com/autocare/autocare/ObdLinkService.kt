@@ -57,6 +57,13 @@ class ObdLinkService : Service() {
         return START_NOT_STICKY
     }
 
+    // Swiping the app away ends its Flutter engine and with it the OBD link,
+    // so there is nothing left to keep alive.
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null

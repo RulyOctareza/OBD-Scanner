@@ -19,10 +19,15 @@ bool get _unsupported =>
 Future<void> startBackgroundMonitoring() async {
   if (_unsupported) return;
   try {
-    await _channel.invokeMethod<bool>('start', {
+    // True only means Android accepted the start request; startForeground
+    // itself can still be refused later (logged natively as ObdLinkService).
+    final accepted = await _channel.invokeMethod<bool>('start', {
       'title': 'AutoCare',
       'text': 'Connected to vehicle',
     });
+    if (accepted != true) {
+      debugPrint('Foreground service start refused (app in background?)');
+    }
   } catch (e) {
     debugPrint('Failed to start background service: $e');
   }
