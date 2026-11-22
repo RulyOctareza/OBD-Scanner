@@ -170,10 +170,10 @@ flutter test
 ### Build rilis
 
 ```bash
-flutter build appbundle --release
+tool/build_verified.sh appbundle --release
 ```
 
-Build rilis ditandatangani dengan upload key dari `android/key.properties` (tidak di-commit). Cara membuatnya, isian Play Console, dan checklist rilis ada di **[docs/play-store.md](docs/play-store.md)**. Screenshot dan grafis listing dibuat ulang dengan [`tool/store_assets/`](tool/store_assets/README.md).
+Skrip ini membungkus `flutter build` dan memastikan kode Dart terbaru benar-benar ikut terkemas. Ini perlu karena path proyek yang berisi spasi bisa membuat Gradle memakai hasil kompilasi lama. Build rilis ditandatangani dengan upload key dari `android/key.properties` (tidak di-commit). Cara membuatnya, isian Play Console, dan checklist rilis ada di **[docs/play-store.md](docs/play-store.md)**. Screenshot dan grafis listing dibuat ulang dengan [`tool/store_assets/`](tool/store_assets/README.md).
 
 ---
 

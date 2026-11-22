@@ -47,13 +47,12 @@ Play memakai *Play App Signing*: Google menyimpan kunci penandatanganan aplikasi
 3. Build:
 
    ```bash
-   flutter clean        # wajib sebelum build untuk upload, lihat catatan di bawah
-   flutter pub get
-   flutter build appbundle --release
+   tool/build_verified.sh appbundle --release
    # hasil: build/app/outputs/bundle/release/app-release.aab
+   # baris terakhir: SRC_REV=<commit>-<waktu>
    ```
 
-   > **Path proyek berisi spasi.** Selama folder proyek bernama `OBD Scanner`, plugin Gradle Flutter salah membaca daftar file Dart (`"\ "` di depfile). Akibatnya kompilasi Dart bisa dianggap *up-to-date* walau kode berubah, dan AAB memakai `libapp.so` lama. `flutter clean` sebelum build untuk upload menghindarinya. Untuk memastikan, cari string yang baru kamu ubah: `unzip -p build/app/outputs/bundle/release/app-release.aab base/lib/arm64-v8a/libapp.so | strings | grep "<teks baru>"`.
+   > **Kenapa tidak `flutter build` biasa?** Path proyek berisi spasi (`OBD Scanner`), dan plugin Gradle Flutter salah membaca daftar file Dart di depfile. Akibatnya kompilasi Dart bisa dianggap *up-to-date* walau kode berubah, sehingga AAB memakai `libapp.so` lama. `tool/build_verified.sh` memaksa kompilasi dengan stempel `SRC_REV` unik (commit + waktu), lalu gagal kalau stempel itu tidak ada di setiap `libapp.so` dalam AAB. Saat app dibuka, logcat mencetak `AutoCare SRC_REV=…`, jadi build yang sedang berjalan di HP bisa dicocokkan. Commit dulu semua perubahan: stempel bertanda `-dirty` berarti AAB dibuat dari kode yang belum di-commit.
 
    Tanpa `key.properties`, build rilis ditandatangani debug key. Build seperti itu bisa dipasang lokal, tetapi ditolak Play. Cek tanda tangannya dengan:
 
@@ -140,7 +139,7 @@ Deklarasikan tipe **Connected device** (`FOREGROUND_SERVICE_CONNECTED_DEVICE`).
 
 - [ ] Bagian 1 beres semua.
 - [ ] `flutter analyze` dan `flutter test` hijau.
-- [ ] AAB dibuat setelah `flutter clean` dan ditandatangani upload key (`keytool -printcert -jarfile …`).
+- [ ] AAB dibuat dengan `tool/build_verified.sh appbundle --release` dari tree yang sudah di-commit (stempel tanpa `-dirty`) dan ditandatangani upload key (`keytool -printcert -jarfile …`).
 - [ ] APK rilis dicoba di HP dengan install bersih: app terbuka, Mode Simulator berjalan, daftar Bluetooth tampil, connect ke adaptor dan notifikasi muncul.
 - [ ] Listing `id` dan `en-US` lengkap: teks, ikon, feature graphic, 8 screenshot.
 - [ ] Semua bagian App content berstatus selesai.
