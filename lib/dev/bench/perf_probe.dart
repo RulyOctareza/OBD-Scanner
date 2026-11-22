@@ -34,9 +34,9 @@ class PerfProbe {
 
 class PerfWindow {
   PerfWindow._(this._probe, this.name)
-      : _startMicros = Timeline.now,
-        _cpuStart = processCpuTicks(),
-        _wall = Stopwatch()..start();
+    : _startMicros = Timeline.now,
+      _cpuStart = processCpuTicks(),
+      _wall = Stopwatch()..start();
 
   final PerfProbe _probe;
   final String name;
@@ -57,15 +57,22 @@ class PerfWindow {
       final vsync = f.timestampInMicroseconds(FramePhase.vsyncStart);
       return vsync >= _startMicros && vsync <= endMicros;
     }).toList();
-    final build = frames.map((f) => f.buildDuration.inMicroseconds / 1000).toList()..sort();
-    final raster = frames.map((f) => f.rasterDuration.inMicroseconds / 1000).toList()..sort();
+    final build =
+        frames.map((f) => f.buildDuration.inMicroseconds / 1000).toList()
+          ..sort();
+    final raster =
+        frames.map((f) => f.rasterDuration.inMicroseconds / 1000).toList()
+          ..sort();
     final janky = frames
-        .where((f) =>
-            f.buildDuration.inMicroseconds / 1000 > _budgetMs ||
-            f.rasterDuration.inMicroseconds / 1000 > _budgetMs)
+        .where(
+          (f) =>
+              f.buildDuration.inMicroseconds / 1000 > _budgetMs ||
+              f.rasterDuration.inMicroseconds / 1000 > _budgetMs,
+        )
         .length;
 
-    double avg(List<double> v) => v.isEmpty ? 0 : v.reduce((a, b) => a + b) / v.length;
+    double avg(List<double> v) =>
+        v.isEmpty ? 0 : v.reduce((a, b) => a + b) / v.length;
     double pct(List<double> v, double p) =>
         v.isEmpty ? 0 : v[((v.length - 1) * p).round()];
     double r2(double v) => (v * 100).roundToDouble() / 100;

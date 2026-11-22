@@ -8,11 +8,13 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/bluetooth/obd_service.dart';
+import '../../core/database/database_provider.dart';
 import '../../core/navigation/router.dart';
 import '../../features/live_data/presentation/dashboard_screen.dart';
 import '../../features/live_data/presentation/widgets/gauge_widget.dart';
 import '../../features/live_data/presentation/widgets/telemetry_chart_modal.dart';
 import '../../features/timeline/presentation/timeline_screen.dart';
+import '../../features/trips/presentation/trip_provider.dart';
 import '../fake_elm327.dart';
 import 'perf_probe.dart';
 
@@ -50,7 +52,9 @@ class BenchRunner {
     await Future<void>.delayed(_settle);
 
     unawaited(
-      container.read(obdServiceProvider.notifier).connectToDevice(
+      container
+          .read(obdServiceProvider.notifier)
+          .connectToDevice(
             const BluetoothDevice(
               name: 'Bench ELM327',
               address: '00:00:00:00:BE:01',
@@ -90,10 +94,76 @@ class BenchRunner {
   /// of the logcat buffer.
   static File? resultsFile;
 
+  /// Connects, then reports link health every 30 s and on every status or
+  /// lifecycle change, until the process ends. The host (tool/bench/
+  /// run_background.sh) backgrounds the app, switches the screen off and
+  /// removes the task meanwhile.
+  Future<void> runBackground(Map<String, Object> startup) async {
+    try {
+      emit({'type': 'startup', ...startup});
+      await _waitFor('splash done', () => _path == '/health');
+      unawaited(
+        container
+            .read(obdServiceProvider.notifier)
+            .connectToDevice(
+              const BluetoothDevice(
+                name: 'Bench ELM327',
+                address: '00:00:00:00:BE:01',
+              ),
+            ),
+      );
+      await _waitFor(
+        'link connected',
+        () => container.read(obdServiceProvider).status == ObdStatus.connected,
+      );
+      goRouter.go('/dashboard');
+      final db = container.read(databaseProvider);
+      final clock = Stopwatch()..start();
+
+      Future<void> report(String why) async {
+        final state = container.read(obdServiceProvider);
+        final points = await db
+            .customSelect('SELECT COUNT(*) AS n FROM trip_points')
+            .getSingle();
+        emit({
+          'type': 'bg',
+          'why': why,
+          't_s': clock.elapsed.inSeconds,
+          'lifecycle': WidgetsBinding.instance.lifecycleState?.name ?? 'none',
+          'status': state.status.name,
+          'answers': adapter.answers,
+          'opens': adapter.openCount,
+          'trip_points': points.read<int>('n'),
+          'recording': container.read(tripRecorderProvider).isRecording,
+          'telemetry_age_ms': DateTime.now()
+              .difference(state.telemetry.timestamp)
+              .inMilliseconds,
+        });
+      }
+
+      container.listen<ObdStatus>(
+        obdServiceProvider.select((s) => s.status),
+        (previous, next) => report('status ${previous?.name} -> ${next.name}'),
+      );
+      WidgetsBinding.instance.addObserver(
+        _LifecycleReporter((state) => report('lifecycle ${state.name}')),
+      );
+      await report('connected');
+      debugPrint('${benchTag}_BG_READY');
+      Timer.periodic(const Duration(seconds: 30), (_) => report('tick'));
+    } catch (e, stack) {
+      debugPrint('${benchTag}_FAILED $e\n$stack');
+    }
+  }
+
   static void emit(Map<String, Object> data) {
     final line = jsonEncode(data);
     debugPrint('$benchTag $line');
-    resultsFile?.writeAsStringSync('$line\n', mode: FileMode.append, flush: true);
+    resultsFile?.writeAsStringSync(
+      '$line\n',
+      mode: FileMode.append,
+      flush: true,
+    );
   }
 
   String get _path => goRouter.routerDelegate.currentConfiguration.uri.path;
@@ -135,7 +205,13 @@ class BenchRunner {
   }
 
   Future<void> _tabSwitching() async {
-    const tabs = ['/health', '/dashboard', '/live_data', '/timeline', '/settings'];
+    const tabs = [
+      '/health',
+      '/dashboard',
+      '/live_data',
+      '/timeline',
+      '/settings',
+    ];
     goRouter.go(tabs.first);
     await Future<void>.delayed(_settle);
     await _measure('tab_switching', () async {
@@ -194,7 +270,8 @@ class BenchRunner {
         final position = (element.state as ScrollableState).position;
         if (position.axis == Axis.vertical &&
             position.hasContentDimensions &&
-            (best == null || position.maxScrollExtent > best!.maxScrollExtent)) {
+            (best == null ||
+                position.maxScrollExtent > best!.maxScrollExtent)) {
           best = position;
         }
       }
@@ -204,4 +281,13 @@ class BenchRunner {
     root.visitChildElements(visit);
     return best;
   }
+}
+
+class _LifecycleReporter with WidgetsBindingObserver {
+  _LifecycleReporter(this.onChange);
+
+  final void Function(AppLifecycleState state) onChange;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => onChange(state);
 }

@@ -23,8 +23,8 @@ class _ReleaseLikeNoNetwork extends HttpOverrides {
   HttpClient createHttpClient(SecurityContext? context) =>
       super.createHttpClient(context)
         ..connectionFactory = (uri, proxyHost, proxyPort) => Future.error(
-              const SocketException('bench: no INTERNET permission, as in release'),
-            );
+          const SocketException('bench: no INTERNET permission, as in release'),
+        );
 }
 
 Future<void> main() async {
@@ -71,7 +71,12 @@ Future<void> main() async {
   final firstFrameMs =
       mainClock.elapsedMilliseconds - seedClock.elapsedMilliseconds;
 
-  await BenchRunner(container: container, adapter: adapter, probe: probe).run({
+  final runner = BenchRunner(
+    container: container,
+    adapter: adapter,
+    probe: probe,
+  );
+  final startup = <String, Object>{
     'abi': Abi.current().toString(),
     'os': Platform.operatingSystemVersion,
     'cpus': Platform.numberOfProcessors,
@@ -79,5 +84,11 @@ Future<void> main() async {
     'main_to_first_frame_ms': firstFrameMs,
     'cached_fonts_deleted': cachedFonts.length,
     'seed_ms': seedClock.elapsedMilliseconds,
-  });
+  };
+  // "background": link-survival check driven by tool/bench/run_background.sh.
+  if (const String.fromEnvironment('BENCH_SCENARIO') == 'background') {
+    await runner.runBackground(startup);
+  } else {
+    await runner.run(startup);
+  }
 }

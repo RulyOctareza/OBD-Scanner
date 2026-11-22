@@ -42,7 +42,9 @@ Future<AppDatabase> openSeededBenchDatabase() async {
       final start = now.subtract(Duration(days: 28 - trip, hours: 2));
       final minutes = 20 + random.nextInt(20);
       final distance = minutes * 0.55;
-      final tripId = await db.into(db.trips).insert(
+      final tripId = await db
+          .into(db.trips)
+          .insert(
             TripsCompanion.insert(
               startTime: start,
               endTime: Value(start.add(Duration(minutes: minutes))),
@@ -80,7 +82,9 @@ Future<AppDatabase> openSeededBenchDatabase() async {
     }
 
     for (var i = 0; i < 12; i++) {
-      await db.into(db.fuelLogs).insert(
+      await db
+          .into(db.fuelLogs)
+          .insert(
             FuelLogsCompanion.insert(
               timestamp: now.subtract(Duration(days: 60 - i * 5)),
               fuelType: 'Pertalite',
@@ -92,7 +96,9 @@ Future<AppDatabase> openSeededBenchDatabase() async {
           );
     }
     for (var i = 0; i < 6; i++) {
-      await db.into(db.maintenanceLogs).insert(
+      await db
+          .into(db.maintenanceLogs)
+          .insert(
             MaintenanceLogsCompanion.insert(
               timestamp: now.subtract(Duration(days: 180 - i * 30)),
               type: i.isEven ? 'Ganti Oli' : 'Filter Udara',
@@ -102,7 +108,9 @@ Future<AppDatabase> openSeededBenchDatabase() async {
             ),
           );
     }
-    await db.into(db.dtcLogs).insert(
+    await db
+        .into(db.dtcLogs)
+        .insert(
           DtcLogsCompanion.insert(
             timestamp: now.subtract(const Duration(days: 9)),
             code: 'P0133',
