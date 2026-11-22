@@ -483,9 +483,13 @@ class DashboardScreen extends ConsumerWidget {
     WidgetRef ref, {
     required bool isPortrait,
   }) {
-    final ecoBadge = ObdSelect<bool>(
-      selector: (s) => s.telemetry.isEcoMode,
-      builder: (context, isEcoMode, _) => _buildEcoBadge(isEcoMode),
+    // Live parts sit in their own layers (RepaintBoundary): a change
+    // re-records only them, not the whole cockpit.
+    final ecoBadge = RepaintBoundary(
+      child: ObdSelect<bool>(
+        selector: (s) => s.telemetry.isEcoMode,
+        builder: (context, isEcoMode, _) => _buildEcoBadge(isEcoMode),
+      ),
     );
 
     final tripARecord = GestureDetector(
@@ -516,25 +520,27 @@ class DashboardScreen extends ConsumerWidget {
                 size: 12,
               ),
               const SizedBox(width: 6),
-              // Rebuilds on the displayed distance only.
-              Consumer(
-                builder: (context, ref, _) {
-                  final tripA = ref.watchVisible(
-                    context,
-                    tripRecorderProvider.select(
-                      (t) => t.tripADistance.toStringAsFixed(1),
-                    ),
-                  );
-                  return Text(
-                    'TRIP A: $tripA km',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white70,
-                      fontFamily: 'monospace',
-                    ),
-                  );
-                },
+              // Rebuilds on the displayed distance only, in its own layer.
+              RepaintBoundary(
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final tripA = ref.watchVisible(
+                      context,
+                      tripRecorderProvider.select(
+                        (t) => t.tripADistance.toStringAsFixed(1),
+                      ),
+                    );
+                    return Text(
+                      'TRIP A: $tripA km',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white70,
+                        fontFamily: 'monospace',
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -570,25 +576,27 @@ class DashboardScreen extends ConsumerWidget {
                 size: 12,
               ),
               const SizedBox(width: 6),
-              // Rebuilds on the displayed distance only.
-              Consumer(
-                builder: (context, ref, _) {
-                  final tripB = ref.watchVisible(
-                    context,
-                    tripRecorderProvider.select(
-                      (t) => t.tripBDistance.toStringAsFixed(1),
-                    ),
-                  );
-                  return Text(
-                    'TRIP B: $tripB km',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white70,
-                      fontFamily: 'monospace',
-                    ),
-                  );
-                },
+              // Rebuilds on the displayed distance only, in its own layer.
+              RepaintBoundary(
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final tripB = ref.watchVisible(
+                      context,
+                      tripRecorderProvider.select(
+                        (t) => t.tripBDistance.toStringAsFixed(1),
+                      ),
+                    );
+                    return Text(
+                      'TRIP B: $tripB km',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white70,
+                        fontFamily: 'monospace',
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -726,15 +734,19 @@ class DashboardScreen extends ConsumerWidget {
           currentSelection: metricType,
           telemetry: ref.read(obdServiceProvider).telemetry,
         ),
-        // Rebuilds only when the displayed text changes.
-        child: ObdSelect<String>(
-          selector: (s) =>
-              _statValueText(metricType, metricValue(s.telemetry, metricType)),
-          builder: (context, valueText, _) => _buildSmallStatCard(
-            label: config.label,
-            value: valueText,
-            icon: _getMetricIcon(metricType),
-            color: config.color,
+        // Rebuilds only when the displayed text changes, in its own layer.
+        child: RepaintBoundary(
+          child: ObdSelect<String>(
+            selector: (s) => _statValueText(
+              metricType,
+              metricValue(s.telemetry, metricType),
+            ),
+            builder: (context, valueText, _) => _buildSmallStatCard(
+              label: config.label,
+              value: valueText,
+              icon: _getMetricIcon(metricType),
+              color: config.color,
+            ),
           ),
         ),
       ),

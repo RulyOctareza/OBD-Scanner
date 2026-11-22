@@ -244,54 +244,59 @@ class _GaugeWidgetState extends State<GaugeWidget>
                       warningThreshold: widget.config.warningThreshold,
                     ),
                     // Center Digital Readout: follows every animation
-                    // frame on its own.
-                    ValueListenableBuilder<double>(
-                      valueListenable: _shown,
-                      builder: (context, displayValue, _) {
-                        final isWarning = _isWarning(displayValue);
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(height: widget.compact ? 6 : 12),
-                            Text(
-                              widget.value == null
-                                  ? '--'
-                                  : displayValue.toStringAsFixed(
-                                      widget.config.type ==
-                                              ObdMetricType.voltage
-                                          ? 1
-                                          : 0,
+                    // frame in its own layer, so the rest of the screen is
+                    // not re-recorded per frame and stays raster-cacheable.
+                    RepaintBoundary(
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _shown,
+                        builder: (context, displayValue, _) {
+                          final isWarning = _isWarning(displayValue);
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(height: widget.compact ? 6 : 12),
+                              Text(
+                                widget.value == null
+                                    ? '--'
+                                    : displayValue.toStringAsFixed(
+                                        widget.config.type ==
+                                                ObdMetricType.voltage
+                                            ? 1
+                                            : 0,
+                                      ),
+                                style: TextStyle(
+                                  fontSize: widget.compact ? 30 : 38,
+                                  fontWeight: FontWeight.w900,
+                                  color: isWarning
+                                      ? const Color(0xFFFF3366)
+                                      : Colors.white,
+                                  fontFamily: 'monospace',
+                                  shadows: [
+                                    Shadow(
+                                      color: isWarning
+                                          ? const Color(
+                                              0xFFFF3366,
+                                            ).withOpacity(0.6)
+                                          : widget.config.color.withOpacity(
+                                              0.4,
+                                            ),
+                                      blurRadius: 10,
                                     ),
-                              style: TextStyle(
-                                fontSize: widget.compact ? 30 : 38,
-                                fontWeight: FontWeight.w900,
-                                color: isWarning
-                                    ? const Color(0xFFFF3366)
-                                    : Colors.white,
-                                fontFamily: 'monospace',
-                                shadows: [
-                                  Shadow(
-                                    color: isWarning
-                                        ? const Color(
-                                            0xFFFF3366,
-                                          ).withOpacity(0.6)
-                                        : widget.config.color.withOpacity(0.4),
-                                    blurRadius: 10,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            Text(
-                              widget.config.unit,
-                              style: TextStyle(
-                                fontSize: widget.compact ? 10 : 12,
-                                fontWeight: FontWeight.bold,
-                                color: widget.config.color.withOpacity(0.7),
+                              Text(
+                                widget.config.unit,
+                                style: TextStyle(
+                                  fontSize: widget.compact ? 10 : 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: widget.config.color.withOpacity(0.7),
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),
