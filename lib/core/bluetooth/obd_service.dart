@@ -248,9 +248,11 @@ class ObdService extends StateNotifier<ObdState> {
           applySimulatorMode(true);
         } else {
           // Wait for OS Bluetooth / ELM327 to release previous RFCOMM.
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted && !state.isSimulatorMode) {
-              _autoConnect();
+          Future.delayed(const Duration(seconds: 3), () async {
+            try {
+              if (await _autoConnectAllowed()) await _autoConnect();
+            } catch (e) {
+              debugPrint('Startup auto-connect failed: $e');
             }
           });
         }
@@ -273,31 +275,12 @@ class ObdService extends StateNotifier<ObdState> {
     _autoReconnectTimer = Timer(_reconnectDelay, () async {
       try {
         if (!mounted) return;
-        if (state.isSimulatorMode || _userRequestedDisconnect) {
-          _scheduleNextReconnectCheck();
-          return;
-        }
-
-        final db = _ref.read(databaseProvider);
-        final autoConnectOBD =
-            await db.getBoolPreference('auto_connect_obd') ?? true;
-        final isSimulatorMode =
-            await db.getBoolPreference('is_simulator_mode') ?? false;
-
-        final shouldAttempt = autoConnectOBD &&
-            !isSimulatorMode &&
-            !state.isSimulatorMode &&
-            (state.status == ObdStatus.disconnected ||
-                state.status == ObdStatus.error);
-
-        if (shouldAttempt) {
-          final before = state.status;
+        if (await _autoConnectAllowed()) {
           await _autoConnect();
           // Back off when still disconnected after an attempt.
           if (mounted &&
               (state.status == ObdStatus.disconnected ||
-                  state.status == ObdStatus.error) &&
-              before != ObdStatus.connected) {
+                  state.status == ObdStatus.error)) {
             _bumpReconnectDelay();
           }
         }
@@ -319,6 +302,29 @@ class ObdService extends StateNotifier<ObdState> {
 
   void _resetReconnectDelay() {
     _reconnectDelay = _minReconnectDelay;
+    // A check already waiting out a backed-off delay (up to 120 s) would
+    // otherwise be the first to notice the next dropped link.
+    if (_autoReconnectTimer != null) _scheduleNextReconnectCheck();
+  }
+
+  /// The one rule for every automatic connect, at startup and from the
+  /// reconnect timer: the "Sambung otomatis" switch is on, the app is not in
+  /// simulator mode, the link is idle, and the user has not cancelled or
+  /// disconnected by hand. That latch clears only on a manual connect or when
+  /// the switch is turned back on ([allowAutoReconnect]).
+  Future<bool> _autoConnectAllowed() async {
+    bool idle() =>
+        mounted &&
+        !state.isSimulatorMode &&
+        !_userRequestedDisconnect &&
+        (state.status == ObdStatus.disconnected ||
+            state.status == ObdStatus.error);
+    if (!idle()) return false;
+    final db = _ref.read(databaseProvider);
+    final enabled = await db.getBoolPreference('auto_connect_obd') ?? true;
+    final simPref = await db.getBoolPreference('is_simulator_mode') ?? false;
+    // Checked again after the reads: the user may have tapped Batal meanwhile.
+    return enabled && !simPref && idle();
   }
 
   /// The connection sheet holds auto-connect while it is open, so a
