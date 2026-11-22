@@ -17,16 +17,11 @@ APK=build/app/outputs/flutter-apk/app-profile.apk
 mkdir -p "$OUT"
 
 if [[ "${2:-}" != "--no-build" ]]; then
-  # The project path has a space, which breaks the Flutter Gradle plugin's
-  # depfile parsing: Dart edits alone do not rerun the Dart compile. A define
-  # derived from the sources makes any edit a changed task input.
-  src_rev=$(find lib pubspec.yaml pubspec.lock -type f -print0 | sort -z |
-    xargs -0 shasum | shasum | cut -c1-12)
-  flutter build apk --profile \
+  # Fresh Dart code is proven by tool/build_verified.sh (SRC_REV stamp).
+  tool/build_verified.sh apk --profile \
     --target-platform "${TARGET_PLATFORM:-android-arm}" \
     -t lib/dev/bench/bench_main.dart \
-    -P autocareBench=true \
-    --dart-define=AUTOCARE_SRC_REV="$src_rev"
+    -P autocareBench=true | tee "$OUT/build.txt"
 fi
 ls -l "$APK" > "$OUT/apk.txt"
 adb install -r "$APK" > /dev/null

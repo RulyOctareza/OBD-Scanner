@@ -257,14 +257,14 @@ class ObdService extends StateNotifier<ObdState> {
       } catch (e) {
         debugPrint('OBD startup mode restore failed: $e');
       }
+      // The awaited prefs read can outlive this notifier (and its container).
+      if (!mounted) return;
       _startAutoReconnectTimer();
     });
   }
 
   void _startAutoReconnectTimer() {
-    if (Platform.environment.containsKey('FLUTTER_TEST')) {
-      return;
-    }
+    if (!_ref.read(obdAutoReconnectTimerProvider)) return;
     _scheduleNextReconnectCheck();
   }
 
@@ -1469,6 +1469,13 @@ class ObdService extends StateNotifier<ObdState> {
     super.dispose();
   }
 }
+
+/// Whether [ObdService] runs its periodic auto-reconnect check (15 s backoff
+/// up to 120 s). Off under `flutter test`; a test overrides it to true and
+/// drives the backoff with fake_async.
+final obdAutoReconnectTimerProvider = Provider<bool>(
+  (ref) => !Platform.environment.containsKey('FLUTTER_TEST'),
+);
 
 final obdServiceProvider = StateNotifierProvider<ObdService, ObdState>((ref) {
   return ObdService(ref);

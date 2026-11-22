@@ -6,6 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/router.dart';
 import 'core/theme/app_theme.dart';
 
+/// Build stamp set by tool/build_verified.sh. Logged at start so logcat shows
+/// which build runs on a device.
+const _srcRev = String.fromEnvironment('SRC_REV');
+
 /// App startup, shared with the dev benchmark (lib/dev/bench) so a benchmark
 /// measures the startup the app really runs.
 Future<void> runAutoCare({
@@ -14,6 +18,7 @@ Future<void> runAutoCare({
 }) async {
   // Nothing is awaited before runApp: the first frame is not delayed.
   WidgetsFlutterBinding.ensureInitialized();
+  if (_srcRev.isNotEmpty) debugPrint('AutoCare SRC_REV=$_srcRev');
   // Read lazily, only when the licenses page opens.
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(
