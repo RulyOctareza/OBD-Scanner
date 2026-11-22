@@ -26,10 +26,12 @@ class TelemetryChartModal extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final config = ObdMetricConfig.all.firstWhere((c) => c.type == metricType);
+    final config = ObdMetricConfig.of(metricType);
     final historyAsync = ref.watch(telemetryHistoryProvider(metricType));
     final selectedRange = ref.watch(telemetryTimeRangeProvider);
-    final obdState = ref.watch(obdServiceProvider);
+    final isConnected = ref.watch(
+      obdServiceProvider.select((s) => s.status == ObdStatus.connected),
+    );
 
     final isVoltageOrFuelEco =
         metricType == ObdMetricType.voltage ||
@@ -99,7 +101,7 @@ class TelemetryChartModal extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          if (obdState.status == ObdStatus.connected)
+                          if (isConnected)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(

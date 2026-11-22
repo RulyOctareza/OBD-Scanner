@@ -13,9 +13,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 13+: lets the user see the connected-link notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="autocare"
+        android:label="AutoCare"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
@@ -40,6 +42,11 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Runs only while an OBD link is open; started from Dart, never on boot. -->
+        <service
+            android:name=".ObdLinkService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
         <!-- Disable Impeller on Android to prevent Vulkan driver crashes on older GPUs (e.g. Adreno 506 / Samsung A6+) -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

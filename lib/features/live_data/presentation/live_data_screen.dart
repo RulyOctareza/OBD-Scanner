@@ -3,22 +3,159 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/obd/obd_telemetry.dart';
+import '../../../core/widgets/live_obd.dart';
 import '../../../core/widgets/obd_connection_sheet.dart';
 import 'widgets/gauge_widget.dart';
 import 'widgets/telemetry_chart_modal.dart';
 
+/// One Sensor card: what it shows and how its value text and colour follow
+/// the telemetry.
+class _SensorCard {
+  const _SensorCard(this.type, this.label, this.unit, this.icon, this.display);
+
+  final ObdMetricType type;
+  final String label;
+  final String unit;
+  final IconData icon;
+  final (String, Color) Function(ObdTelemetry t) display;
+}
+
+final List<_SensorCard> _cards = [
+  _SensorCard(
+    ObdMetricType.rpm,
+    'Putaran Mesin',
+    'RPM',
+    Icons.speed_rounded,
+    (t) => (
+      t.rpm.toStringAsFixed(0),
+      t.rpm > 3500 ? AppColors.warning : AppColors.primary,
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.speed,
+    'Kecepatan',
+    'km/h',
+    Icons.navigation_rounded,
+    (t) => (
+      t.speed.toStringAsFixed(0),
+      t.speed > 100 ? AppColors.warning : AppColors.primary,
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.coolant,
+    'Suhu Pendingin',
+    '°C',
+    Icons.thermostat_rounded,
+    (t) => (
+      '${t.coolant.toStringAsFixed(0)}°',
+      t.coolant > 100
+          ? AppColors.danger
+          : (t.coolant > 95 ? AppColors.warning : AppColors.success),
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.voltage,
+    'Tegangan Aki',
+    'Volt',
+    Icons.battery_charging_full_rounded,
+    (t) => (
+      '${t.voltage.toStringAsFixed(1)}V',
+      t.voltage < 11.8 ? AppColors.danger : AppColors.success,
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.throttle,
+    'Bukaan Gas',
+    'Throttle',
+    Icons.airline_seat_recline_extra_rounded,
+    (t) => ('${t.throttle.toStringAsFixed(0)}%', AppColors.primary),
+  ),
+  _SensorCard(
+    ObdMetricType.engineLoad,
+    'Beban Mesin',
+    'Engine Load',
+    Icons.work_rounded,
+    (t) => (
+      '${t.engineLoad.toStringAsFixed(0)}%',
+      t.engineLoad > 85 ? AppColors.warning : AppColors.primary,
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.map,
+    'Tekanan Intake',
+    'MAP · kPa',
+    Icons.compress_rounded,
+    (t) => (t.mapValue.toStringAsFixed(0), AppColors.primary),
+  ),
+  _SensorCard(
+    ObdMetricType.intakeAirTemp,
+    'Suhu Intake',
+    '°C',
+    Icons.ac_unit_rounded,
+    (t) => (
+      t.intakeAirTemp != null
+          ? '${t.intakeAirTemp!.toStringAsFixed(0)}°'
+          : '--',
+      t.intakeAirTemp != null
+          ? (t.intakeAirTemp! > 70
+                ? AppColors.danger
+                : t.intakeAirTemp! > 50
+                ? AppColors.warning
+                : AppColors.success)
+          : AppColors.textSecondary,
+    ),
+  ),
+  _SensorCard(
+    ObdMetricType.maf,
+    'Aliran Udara',
+    'MAF · g/s',
+    Icons.air_rounded,
+    (t) =>
+        (t.maf != null ? t.maf!.toStringAsFixed(1) : '--', AppColors.primary),
+  ),
+  _SensorCard(
+    ObdMetricType.timingAdvance,
+    'Timing Advance',
+    '°',
+    Icons.flash_on_rounded,
+    (t) => (
+      t.timingAdvance != null ? t.timingAdvance!.toStringAsFixed(1) : '--',
+      AppColors.primary,
+    ),
+  ),
+];
+
 class LiveDataScreen extends ConsumerWidget {
   const LiveDataScreen({super.key});
 
-  bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
+  static bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
     return state.checkedSensors.contains(type) &&
         !state.supportedSensors.contains(type);
   }
 
+  /// Bit i set when card i's metric was asked and the car does not answer it.
+  static int _hiddenCards(ObdState state) {
+    var mask = 0;
+    for (var i = 0; i < _cards.length; i++) {
+      if (_isMetricUnsupported(_cards[i].type, state)) mask |= 1 << i;
+    }
+    return mask;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final obdState = ref.watch(obdServiceProvider);
-    final telemetry = obdState.telemetry;
+    // The grid rebuilds only when the link status or the set of hidden cards
+    // changes; each card rebuilds when its own text or colour changes, and
+    // nothing rebuilds while this tab is offstage.
+    final status = ref.watchVisible(
+      context,
+      obdServiceProvider.select((s) => s.status),
+    );
+    final hidden = ref.watchVisible(
+      context,
+      obdServiceProvider.select(_hiddenCards),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -31,12 +168,12 @@ class LiveDataScreen extends ConsumerWidget {
         elevation: 0,
       ),
       body: SafeArea(
-        child:
-            obdState.status != ObdStatus.connected &&
-                obdState.status != ObdStatus.initializing
-            ? ObdNotConnectedView(
-                state: obdState,
-                onConnect: () => showObdConnectionSheet(context, ref),
+        child: status != ObdStatus.connected && status != ObdStatus.initializing
+            ? Consumer(
+                builder: (context, ref, _) => ObdNotConnectedView(
+                  state: ref.watchVisible(context, obdServiceProvider),
+                  onConnect: () => showObdConnectionSheet(context, ref),
+                ),
               )
             : GridView.count(
                 padding: const EdgeInsets.all(AppSpacing.lg),
@@ -45,136 +182,20 @@ class LiveDataScreen extends ConsumerWidget {
                 mainAxisSpacing: AppSpacing.lg,
                 childAspectRatio: 1.15,
                 children: [
-                  if (!_isMetricUnsupported(ObdMetricType.rpm, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.rpm,
-                      'Putaran Mesin',
-                      telemetry.rpm.toStringAsFixed(0),
-                      'RPM',
-                      icon: Icons.speed_rounded,
-                      color: telemetry.rpm > 3500
-                          ? AppColors.warning
-                          : AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.speed, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.speed,
-                      'Kecepatan',
-                      telemetry.speed.toStringAsFixed(0),
-                      'km/h',
-                      icon: Icons.navigation_rounded,
-                      color: telemetry.speed > 100
-                          ? AppColors.warning
-                          : AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.coolant, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.coolant,
-                      'Suhu Pendingin',
-                      '${telemetry.coolant.toStringAsFixed(0)}°',
-                      '°C',
-                      icon: Icons.thermostat_rounded,
-                      color: telemetry.coolant > 100
-                          ? AppColors.danger
-                          : (telemetry.coolant > 95
-                                ? AppColors.warning
-                                : AppColors.success),
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.voltage, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.voltage,
-                      'Tegangan Aki',
-                      '${telemetry.voltage.toStringAsFixed(1)}V',
-                      'Volt',
-                      icon: Icons.battery_charging_full_rounded,
-                      color: telemetry.voltage < 11.8
-                          ? AppColors.danger
-                          : AppColors.success,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.throttle, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.throttle,
-                      'Bukaan Gas',
-                      '${telemetry.throttle.toStringAsFixed(0)}%',
-                      'Throttle',
-                      icon: Icons.airline_seat_recline_extra_rounded,
-                      color: AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.engineLoad, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.engineLoad,
-                      'Beban Mesin',
-                      '${telemetry.engineLoad.toStringAsFixed(0)}%',
-                      'Engine Load',
-                      icon: Icons.work_rounded,
-                      color: telemetry.engineLoad > 85
-                          ? AppColors.warning
-                          : AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.map, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.map,
-                      'Tekanan Intake',
-                      telemetry.mapValue.toStringAsFixed(0),
-                      'MAP · kPa',
-                      icon: Icons.compress_rounded,
-                      color: AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(
-                    ObdMetricType.intakeAirTemp,
-                    obdState,
-                  ))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.intakeAirTemp,
-                      'Suhu Intake',
-                      telemetry.intakeAirTemp != null
-                          ? '${telemetry.intakeAirTemp!.toStringAsFixed(0)}°'
-                          : '--',
-                      '°C',
-                      icon: Icons.ac_unit_rounded,
-                      color: telemetry.intakeAirTemp != null
-                          ? (telemetry.intakeAirTemp! > 70
-                                ? AppColors.danger
-                                : telemetry.intakeAirTemp! > 50
-                                ? AppColors.warning
-                                : AppColors.success)
-                          : AppColors.textSecondary,
-                    ),
-                  if (!_isMetricUnsupported(ObdMetricType.maf, obdState))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.maf,
-                      'Aliran Udara',
-                      telemetry.maf != null
-                          ? telemetry.maf!.toStringAsFixed(1)
-                          : '--',
-                      'MAF · g/s',
-                      icon: Icons.air_rounded,
-                      color: AppColors.primary,
-                    ),
-                  if (!_isMetricUnsupported(
-                    ObdMetricType.timingAdvance,
-                    obdState,
-                  ))
-                    _buildMetricCard(
-                      context,
-                      ObdMetricType.timingAdvance,
-                      'Timing Advance',
-                      telemetry.timingAdvance != null
-                          ? telemetry.timingAdvance!.toStringAsFixed(1)
-                          : '--',
-                      '°',
-                      icon: Icons.flash_on_rounded,
-                      color: AppColors.primary,
-                    ),
+                  for (var i = 0; i < _cards.length; i++)
+                    if (hidden & (1 << i) == 0)
+                      ObdSelect<(String, Color)>(
+                        selector: (s) => _cards[i].display(s.telemetry),
+                        builder: (context, shown, _) => _buildMetricCard(
+                          context,
+                          _cards[i].type,
+                          _cards[i].label,
+                          shown.$1,
+                          _cards[i].unit,
+                          icon: _cards[i].icon,
+                          color: shown.$2,
+                        ),
+                      ),
                 ],
               ),
       ),

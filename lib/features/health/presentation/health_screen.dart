@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/bluetooth/obd_service.dart';
+import '../../../core/obd/obd_metric.dart';
+import '../../../core/widgets/live_obd.dart';
 import '../../../core/widgets/obd_connection_sheet.dart';
 import '../../../core/utils/usefulness_utils.dart';
 import '../../settings/presentation/settings_provider.dart';
@@ -21,40 +23,50 @@ class HealthScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final healthReport = ref.watch(healthProvider);
-    final obdStatus = ref.watch(obdServiceProvider.select((s) => s.status));
-    final isSimulatorMode = ref.watch(
+    // watchVisible: no rebuilds while this tab is offstage (TickerMode off).
+    // Live speed/RPM and trip progress rebuild only their own card below.
+    final healthReport = ref.watchVisible(context, healthProvider);
+    final obdStatus = ref.watchVisible(
+      context,
+      obdServiceProvider.select((s) => s.status),
+    );
+    final isSimulatorMode = ref.watchVisible(
+      context,
       obdServiceProvider.select((s) => s.isSimulatorMode),
     );
-    final connectedDeviceName = ref.watch(
+    final connectedDeviceName = ref.watchVisible(
+      context,
       obdServiceProvider.select((s) => s.connectedDeviceName),
     );
-    final errorMessage = ref.watch(
+    final errorMessage = ref.watchVisible(
+      context,
       obdServiceProvider.select((s) => s.errorMessage),
     );
-    final dtcCount = ref.watch(
+    final dtcCount = ref.watchVisible(
+      context,
       obdServiceProvider.select((s) => s.telemetry.dtcs.length),
     );
-    final dtcCodes = ref.watch(
+    final dtcCodes = ref.watchVisible(
+      context,
       obdServiceProvider.select((s) => s.telemetry.dtcs.join(',')),
     );
-    final vehicleName = ref.watch(
+    final vehicleName = ref.watchVisible(
+      context,
       settingsProvider.select((s) => s.vehicleName),
     );
-    final tripState = ref.watch(tripRecorderProvider);
-    final historicalTrips = ref.watch(historicalTripsProvider);
-    final liveSpeed = ref.watch(
-      obdServiceProvider.select((s) => s.telemetry.speed),
+    final isRecording = ref.watchVisible(
+      context,
+      tripRecorderProvider.select((t) => t.isRecording),
     );
-    final liveRpm = ref.watch(
-      obdServiceProvider.select((s) => s.telemetry.rpm),
-    );
+    final historicalTrips = ref.watchVisible(context, historicalTripsProvider);
 
     // Listen to trip completion to show summary dialog
-    ref.listen(tripRecorderProvider, (previous, next) {
-      if (previous?.lastCompletedTripId == null &&
-          next.lastCompletedTripId != null) {
-        _showTripSummaryDialog(context, ref, next.lastCompletedTripId!);
+    ref.listen(tripRecorderProvider.select((t) => t.lastCompletedTripId), (
+      previous,
+      next,
+    ) {
+      if (previous == null && next != null) {
+        _showTripSummaryDialog(context, ref, next);
       }
     });
 
@@ -127,8 +139,8 @@ class HealthScreen extends ConsumerWidget {
               const SizedBox(height: 20),
 
               // Live Trip Recording Active Banner
-              if (tripState.isRecording) ...[
-                _buildLiveTripRecordingCard(tripState, liveSpeed, liveRpm),
+              if (isRecording) ...[
+                const _LiveTripRecordingCard(),
                 const SizedBox(height: 20),
               ],
 
@@ -155,7 +167,7 @@ class HealthScreen extends ConsumerWidget {
               const SizedBox(height: 20),
 
               // Last Trip Summary (if trip recording is NOT active)
-              if (!tripState.isRecording) ...[
+              if (!isRecording) ...[
                 const Text(
                   'Perjalanan Terakhir',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -455,86 +467,6 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLiveTripRecordingCard(
-    TripRecorderState trip,
-    double speed,
-    double rpm,
-  ) {
-    return Card(
-      color: AppColors.primary.withOpacity(0.08),
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: AppColors.primary, width: 1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const _RecordingPulseDot(),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'SEDANG MEREKAM PERJALANAN',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                      fontSize: 11,
-                      letterSpacing: 1,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _formatDuration(trip.durationSeconds),
-                  style: AppTheme.numberStyle(
-                    fontSize: 12,
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildTripLiveStat(
-                  'Jarak',
-                  '${trip.currentTripDistance.toStringAsFixed(1)} km',
-                ),
-                _buildTripLiveStat('Speed', '${speed.toStringAsFixed(0)} km/h'),
-                _buildTripLiveStat('RPM', rpm.toStringAsFixed(0)),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTripLiveStat(String label, String value) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: AppTheme.numberStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
-      ],
-    );
-  }
-
   Widget _buildWarningCard(BuildContext context, String text) {
     final route = warningActionRoute(text);
     return Card(
@@ -782,12 +714,6 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 
-  String _formatDuration(int seconds) {
-    final m = (seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
   void _showTripSummaryDialog(
     BuildContext context,
     WidgetRef ref,
@@ -941,6 +867,115 @@ class HealthScreen extends ConsumerWidget {
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+String _formatDuration(int seconds) {
+  final m = (seconds ~/ 60).toString().padLeft(2, '0');
+  final s = (seconds % 60).toString().padLeft(2, '0');
+  return '$m:$s';
+}
+
+/// Live speed, RPM and trip progress: rebuilds alone, on its own values.
+class _LiveTripRecordingCard extends ConsumerWidget {
+  const _LiveTripRecordingCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final durationSeconds = ref.watchVisible(
+      context,
+      tripRecorderProvider.select((t) => t.durationSeconds),
+    );
+    final distanceText = ref.watchVisible(
+      context,
+      tripRecorderProvider.select(
+        (t) => t.currentTripDistance.toStringAsFixed(1),
+      ),
+    );
+    return Card(
+      color: AppColors.primary.withOpacity(0.08),
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: AppColors.primary, width: 1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const _RecordingPulseDot(),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'SEDANG MEREKAM PERJALANAN',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                      fontSize: 11,
+                      letterSpacing: 1,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatDuration(durationSeconds),
+                  style: AppTheme.numberStyle(
+                    fontSize: 12,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildTripLiveStat('Jarak', '$distanceText km'),
+                LiveMetric(
+                  type: ObdMetricType.speed,
+                  step: 1,
+                  builder: (context, reading, _) => _buildTripLiveStat(
+                    'Speed',
+                    '${(reading.value ?? 0).toStringAsFixed(0)} km/h',
+                  ),
+                ),
+                LiveMetric(
+                  type: ObdMetricType.rpm,
+                  step: 1,
+                  builder: (context, reading, _) => _buildTripLiveStat(
+                    'RPM',
+                    (reading.value ?? 0).toStringAsFixed(0),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTripLiveStat(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: AppTheme.numberStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
         ),
       ],
     );

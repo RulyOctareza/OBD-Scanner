@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/obd/obd_telemetry.dart';
@@ -12,6 +13,16 @@ class CheckItem {
     required this.isOk,
     required this.detail,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      other is CheckItem &&
+      other.title == title &&
+      other.isOk == isOk &&
+      other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(title, isOk, detail);
 }
 
 class HealthReport {
@@ -30,6 +41,28 @@ class HealthReport {
     required this.checks,
     required this.warnings,
   });
+
+  /// Value equality: healthProvider is recomputed on every telemetry change,
+  /// and Provider only notifies its watchers when the report differs.
+  @override
+  bool operator ==(Object other) =>
+      other is HealthReport &&
+      other.score == score &&
+      other.statusTitle == statusTitle &&
+      other.statusDescription == statusDescription &&
+      other.statusColor == statusColor &&
+      listEquals(other.checks, checks) &&
+      listEquals(other.warnings, warnings);
+
+  @override
+  int get hashCode => Object.hash(
+        score,
+        statusTitle,
+        statusDescription,
+        statusColor,
+        Object.hashAll(checks),
+        Object.hashAll(warnings),
+      );
 }
 
 class HealthEngine {

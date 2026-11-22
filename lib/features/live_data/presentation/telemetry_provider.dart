@@ -1,9 +1,10 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' as drift;
 import '../../../core/database/database.dart';
 import '../../../core/database/database_provider.dart';
-import '../../../core/bluetooth/obd_service.dart';
-import '../../../core/obd/obd_telemetry.dart';
 import '../../../core/utils/performance_utils.dart';
 import 'live_chart_buffer.dart';
 import 'widgets/gauge_widget.dart';
@@ -92,177 +93,204 @@ final telemetryTimeRangeProvider =
   return (minY: minY, maxY: maxY);
 }
 
-final telemetryHistoryProvider =
-    Provider.family<AsyncValue<TelemetryHistoryData>, ObdMetricType>((
-  ref,
-  metricType,
-) {
-  final dbAsync = ref.watch(_dbTripPointsProvider);
-  final liveBuffer = ref.watch(liveChartBufferProvider);
+/// Chart series for one metric: stored trip points in the selected range,
+/// then the live 1 Hz buffer. It recomputes when the buffer samples, once a
+/// second while a chart is open, never per PID response, and is disposed
+/// with the chart together with the buffer and the stored series.
+final telemetryHistoryProvider = Provider.autoDispose
+    .family<AsyncValue<TelemetryHistoryData>, ObdMetricType>((ref, metricType) {
   final timeRange = ref.watch(telemetryTimeRangeProvider);
-  final liveTelemetry = ref.watch(
-    obdServiceProvider.select((s) => s.telemetry),
-  );
+  final storedAsync = ref.watch(storedSeriesProvider((metricType, timeRange)));
+  final liveBuffer = ref.watch(liveChartBufferProvider);
 
-  return dbAsync.when(
-    loading: () => const AsyncValue.loading(),
-    error: (e, st) => AsyncValue.error(e, st),
-    data: (dbPoints) {
-      final now = DateTime.now();
-      final startTime = timeRange.duration != null
-          ? now.subtract(timeRange.duration!)
-          : null;
-
-      final extracted = <TelemetryPoint>[];
-
-      for (final dp in dbPoints) {
-        if (startTime != null && dp.timestamp.isBefore(startTime)) continue;
-        final val = _extractMetricValue(metricType, dp);
-        if (val != null && isValidChartMetricValue(metricType.name, val)) {
-          extracted.add(TelemetryPoint(timestamp: dp.timestamp, value: val));
-        }
-      }
-
-      for (final sample in liveBuffer) {
-        if (startTime != null && sample.timestamp.isBefore(startTime)) {
-          continue;
-        }
-        final val = sample.valueFor(metricType);
-        if (val != null && isValidChartMetricValue(metricType.name, val)) {
-          extracted.add(
-            TelemetryPoint(timestamp: sample.timestamp, value: val),
-          );
-        }
-      }
-
-      // Always append freshest live value
-      final liveVal = _extractLiveTelemetryValue(metricType, liveTelemetry);
-      if (liveVal != null && isValidChartMetricValue(metricType.name, liveVal)) {
-        extracted.add(TelemetryPoint(timestamp: now, value: liveVal));
-      }
-
-      if (extracted.isEmpty) {
-        return AsyncValue.data(TelemetryHistoryData.empty());
-      }
-
-      extracted.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-
-      // Deduplicate near-identical timestamps (< 200ms)
-      final cleanPoints = <TelemetryPoint>[];
-      DateTime? lastTime;
-      for (final pt in extracted) {
-        if (lastTime == null ||
-            pt.timestamp.difference(lastTime).inMilliseconds >= 200) {
-          cleanPoints.add(pt);
-          lastTime = pt.timestamp;
-        } else {
-          // Replace with newer sample at same bucket
-          cleanPoints[cleanPoints.length - 1] = pt;
-          lastTime = pt.timestamp;
-        }
-      }
-
-      if (cleanPoints.length == 1) {
-        final p0 = cleanPoints.first;
-        cleanPoints.insert(
-          0,
-          TelemetryPoint(
-            timestamp: p0.timestamp.subtract(const Duration(seconds: 15)),
-            value: p0.value,
-          ),
-        );
-      }
-
-      final chartPoints = downsamplePoints(cleanPoints, maxPoints: 200);
-      final values = chartPoints.map((e) => e.value).toList();
-      final minV = values.reduce((a, b) => a < b ? a : b);
-      final maxV = values.reduce((a, b) => a > b ? a : b);
-      final avgV = values.reduce((a, b) => a + b) / values.length;
-      final currentV = liveVal ?? chartPoints.last.value;
-      final isStable = (maxV - minV).abs() < 0.0001 ||
-          (maxV - minV) / ((maxV.abs() < 1 ? 1 : maxV.abs())) < 0.002;
-
-      return AsyncValue.data(
-        TelemetryHistoryData(
-          points: chartPoints,
-          currentValue: currentV,
-          minValue: minV,
-          maxValue: maxV,
-          avgValue: avgV,
-          totalPointsCount: cleanPoints.length,
-          isStable: isStable,
-        ),
-      );
-    },
-  );
-});
-
-final _dbTripPointsProvider = StreamProvider<List<TripPoint>>((ref) {
-  final db = ref.watch(databaseProvider);
-  return (db.select(db.tripPoints)
-        ..orderBy([
-          (t) => drift.OrderingTerm(
-                expression: t.timestamp,
-                mode: drift.OrderingMode.asc,
-              ),
-        ]))
-      .watch();
-});
-
-double? _extractMetricValue(ObdMetricType type, TripPoint dp) {
-  switch (type) {
-    case ObdMetricType.rpm:
-      return dp.rpm;
-    case ObdMetricType.speed:
-      return dp.speed;
-    case ObdMetricType.coolant:
-      return dp.coolant;
-    case ObdMetricType.voltage:
-      return dp.voltage;
-    case ObdMetricType.throttle:
-      return dp.throttle;
-    case ObdMetricType.engineLoad:
-      return dp.engineLoad;
-    case ObdMetricType.map:
-      return dp.mapValue;
-    case ObdMetricType.fuel:
-      return dp.fuel;
-    case ObdMetricType.fuelEconomy:
-      return dp.fuelEconomy;
-    case ObdMetricType.intakeAirTemp:
-      return dp.intakeAirTemp;
-    case ObdMetricType.maf:
-      return dp.maf;
-    case ObdMetricType.timingAdvance:
-      return dp.timingAdvance;
+  if (storedAsync.hasError) {
+    return AsyncValue.error(storedAsync.error!, storedAsync.stackTrace!);
   }
+  final stored = storedAsync.valueOrNull;
+  // Live samples are shown while the stored series is still loading.
+  if (stored == null && liveBuffer.isEmpty) return const AsyncValue.loading();
+  return AsyncValue.data(
+    buildTelemetryHistory(
+      metricType: metricType,
+      timeRange: timeRange,
+      stored: stored ?? const [],
+      live: liveBuffer,
+      now: DateTime.now(),
+    ),
+  );
+});
+
+/// The cleaning pipeline of the chart (book telemetry/chart_history):
+/// range filter, validity filter, merge by time, collapse samples closer than
+/// 200 ms, pad a single point, downsample to 200, stats. [stored] and [live]
+/// are each in time order.
+TelemetryHistoryData buildTelemetryHistory({
+  required ObdMetricType metricType,
+  required TelemetryTimeRange timeRange,
+  required List<TelemetryPoint> stored,
+  required List<TelemetryPointBundle> live,
+  required DateTime now,
+}) {
+  final startTime =
+      timeRange.duration != null ? now.subtract(timeRange.duration!) : null;
+  bool inRange(DateTime t) => startTime == null || !t.isBefore(startTime);
+
+  final fromStore = [
+    for (final point in stored)
+      if (inRange(point.timestamp)) point,
+  ];
+  final fromLive = <TelemetryPoint>[];
+  for (final sample in live) {
+    if (!inRange(sample.timestamp)) continue;
+    final value = sample.valueFor(metricType);
+    if (value != null && isValidChartMetricValue(metricType.name, value)) {
+      fromLive.add(TelemetryPoint(timestamp: sample.timestamp, value: value));
+    }
+  }
+
+  // Both lists are in time order: a merge instead of a sort.
+  final merged = <TelemetryPoint>[];
+  var i = 0;
+  var j = 0;
+  while (i < fromStore.length || j < fromLive.length) {
+    if (j >= fromLive.length ||
+        (i < fromStore.length &&
+            !fromStore[i].timestamp.isAfter(fromLive[j].timestamp))) {
+      merged.add(fromStore[i++]);
+    } else {
+      merged.add(fromLive[j++]);
+    }
+  }
+  if (merged.isEmpty) return TelemetryHistoryData.empty();
+
+  final cleanPoints = <TelemetryPoint>[];
+  DateTime? lastTime;
+  for (final pt in merged) {
+    if (lastTime == null ||
+        pt.timestamp.difference(lastTime).inMilliseconds >= 200) {
+      cleanPoints.add(pt);
+    } else {
+      // Replace with newer sample at same bucket
+      cleanPoints[cleanPoints.length - 1] = pt;
+    }
+    lastTime = pt.timestamp;
+  }
+
+  if (cleanPoints.length == 1) {
+    final p0 = cleanPoints.first;
+    cleanPoints.insert(
+      0,
+      TelemetryPoint(
+        timestamp: p0.timestamp.subtract(const Duration(seconds: 15)),
+        value: p0.value,
+      ),
+    );
+  }
+
+  final chartPoints = downsamplePoints(cleanPoints, maxPoints: 200);
+  final values = chartPoints.map((e) => e.value).toList();
+  final minV = values.reduce((a, b) => a < b ? a : b);
+  final maxV = values.reduce((a, b) => a > b ? a : b);
+  final avgV = values.reduce((a, b) => a + b) / values.length;
+  final currentV = fromLive.isNotEmpty ? fromLive.last.value : chartPoints.last.value;
+  final isStable = (maxV - minV).abs() < 0.0001 ||
+      (maxV - minV) / ((maxV.abs() < 1 ? 1 : maxV.abs())) < 0.002;
+
+  return TelemetryHistoryData(
+    points: chartPoints,
+    currentValue: currentV,
+    minValue: minV,
+    maxValue: maxV,
+    avgValue: avgV,
+    totalPointsCount: cleanPoints.length,
+    isStable: isStable,
+  );
 }
 
-double? _extractLiveTelemetryValue(ObdMetricType type, ObdTelemetry telemetry) {
+/// Rows the "Semua" range reads at most; downsampling keeps 200 of them.
+const _allRangeBuckets = 400;
+
+/// Stored trip points of one metric in one range, read once per chart
+/// opening: only timestamp and that column, only the range. Points recorded
+/// while the chart is open reach it at a higher rate through the live buffer,
+/// so watching the table would repeat work on every insert.
+@visibleForTesting
+final storedSeriesProvider = FutureProvider.autoDispose
+    .family<List<TelemetryPoint>, (ObdMetricType, TelemetryTimeRange)>(
+        (ref, key) async {
+  final (metricType, timeRange) = key;
+  final db = ref.watch(databaseProvider);
+  final column = _tripPointColumn(db, metricType).name;
+  final duration = timeRange.duration;
+
+  final List<drift.QueryRow> rows;
+  if (duration != null) {
+    rows = await db.customSelect(
+      'SELECT timestamp AS t, $column AS v FROM trip_points '
+      'WHERE $column IS NOT NULL AND timestamp >= ? ORDER BY timestamp',
+      variables: [drift.Variable<DateTime>(DateTime.now().subtract(duration))],
+      readsFrom: {db.tripPoints},
+    ).get();
+  } else {
+    // "Semua" spans every trip ever recorded, so it is bucketed in SQL.
+    // Timestamps are unix seconds; with a bare column next to MAX(), SQLite
+    // returns that column from the newest row of each bucket.
+    final span = await db.customSelect(
+      'SELECT MIN(timestamp) AS a, MAX(timestamp) AS b FROM trip_points '
+      'WHERE $column IS NOT NULL',
+      readsFrom: {db.tripPoints},
+    ).getSingle();
+    final first = span.readNullable<int>('a');
+    final last = span.readNullable<int>('b');
+    if (first == null || last == null) return const [];
+    final bucket = math.max(1, ((last - first) / _allRangeBuckets).ceil());
+    rows = await db.customSelect(
+      'SELECT MAX(timestamp) AS t, $column AS v FROM trip_points '
+      'WHERE $column IS NOT NULL GROUP BY timestamp / ? ORDER BY t',
+      variables: [drift.Variable.withInt(bucket)],
+      readsFrom: {db.tripPoints},
+    ).get();
+  }
+
+  return [
+    for (final row in rows)
+      if (isValidChartMetricValue(metricType.name, row.read<double>('v')))
+        TelemetryPoint(
+          timestamp: row.read<DateTime>('t'),
+          value: row.read<double>('v'),
+        ),
+  ];
+});
+
+drift.GeneratedColumn<double> _tripPointColumn(
+  AppDatabase db,
+  ObdMetricType type,
+) {
+  final t = db.tripPoints;
   switch (type) {
     case ObdMetricType.rpm:
-      return telemetry.rpm;
+      return t.rpm;
     case ObdMetricType.speed:
-      return telemetry.speed;
+      return t.speed;
     case ObdMetricType.coolant:
-      return telemetry.coolant;
+      return t.coolant;
     case ObdMetricType.voltage:
-      return telemetry.voltage;
+      return t.voltage;
     case ObdMetricType.throttle:
-      return telemetry.throttle;
+      return t.throttle;
     case ObdMetricType.engineLoad:
-      return telemetry.engineLoad;
+      return t.engineLoad;
     case ObdMetricType.map:
-      return telemetry.mapValue;
+      return t.mapValue;
     case ObdMetricType.fuel:
-      return telemetry.fuelLevel;
+      return t.fuel;
     case ObdMetricType.fuelEconomy:
-      return telemetry.fuelEconomy;
+      return t.fuelEconomy;
     case ObdMetricType.intakeAirTemp:
-      return telemetry.intakeAirTemp;
+      return t.intakeAirTemp;
     case ObdMetricType.maf:
-      return telemetry.maf;
+      return t.maf;
     case ObdMetricType.timingAdvance:
-      return telemetry.timingAdvance;
+      return t.timingAdvance;
   }
 }

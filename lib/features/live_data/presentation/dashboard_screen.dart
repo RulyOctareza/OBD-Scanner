@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
 import '../../../core/obd/obd_telemetry.dart';
+import '../../../core/widgets/live_obd.dart';
 import '../../../core/widgets/obd_connection_sheet.dart';
 import 'widgets/gauge_widget.dart';
 import 'widgets/telemetry_chart_modal.dart';
@@ -12,36 +13,19 @@ import '../../settings/presentation/settings_provider.dart';
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
-  double? _getValueForMetric(ObdMetricType type, ObdTelemetry telemetry) {
-    switch (type) {
-      case ObdMetricType.rpm:
-        return telemetry.rpm;
-      case ObdMetricType.speed:
-        return telemetry.speed;
-      case ObdMetricType.coolant:
-        return telemetry.coolant;
-      case ObdMetricType.voltage:
-        return telemetry.voltage;
-      case ObdMetricType.throttle:
-        return telemetry.throttle;
-      case ObdMetricType.engineLoad:
-        return telemetry.engineLoad;
-      case ObdMetricType.map:
-        return telemetry.mapValue;
-      case ObdMetricType.fuel:
-        return telemetry.fuelLevel;
-      case ObdMetricType.fuelEconomy:
-        return telemetry.fuelEconomy;
-      case ObdMetricType.intakeAirTemp:
-        return telemetry.intakeAirTemp;
-      case ObdMetricType.maf:
-        return telemetry.maf;
-      case ObdMetricType.timingAdvance:
-        return telemetry.timingAdvance;
+  double? _getValueForMetric(ObdMetricType type, ObdTelemetry telemetry) =>
+      metricValue(telemetry, type);
+
+  /// Bit i set when slot i's metric was asked and the car does not answer it.
+  static int _unsupportedMask(ObdState state, List<ObdMetricType> slots) {
+    var mask = 0;
+    for (var i = 0; i < slots.length; i++) {
+      if (_isMetricUnsupported(slots[i], state)) mask |= 1 << i;
     }
+    return mask;
   }
 
-  bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
+  static bool _isMetricUnsupported(ObdMetricType type, ObdState state) {
     return state.checkedSensors.contains(type) &&
         !state.supportedSensors.contains(type);
   }
@@ -85,10 +69,18 @@ class DashboardScreen extends ConsumerWidget {
                       Navigator.pop(context);
                       TelemetryChartModal.show(context, currentSelection);
                     },
-                    icon: const Icon(Icons.show_chart_rounded, size: 18, color: AppColors.primary),
+                    icon: const Icon(
+                      Icons.show_chart_rounded,
+                      size: 18,
+                      color: AppColors.primary,
+                    ),
                     label: const Text(
                       'Grafik',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primary),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -162,10 +154,20 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final obdState = ref.watch(obdServiceProvider);
-    final telemetry = obdState.telemetry;
+    // Only the link status is watched here; each gauge, stat card, the ECO
+    // badge and the trip counters rebuild on their own values, and nothing
+    // rebuilds while this tab is offstage.
+    final status = ref.watchVisible(
+      context,
+      obdServiceProvider.select((s) => s.status),
+    );
+    final isLinkUp =
+        status == ObdStatus.connected || status == ObdStatus.initializing;
 
-    final settings = ref.watch(settingsProvider.select((s) => (
+    final settings = ref.watchVisible(
+      context,
+      settingsProvider.select(
+        (s) => (
           left: s.leftMetric,
           right: s.rightMetric,
           fullscreen: s.isFullscreenCockpit,
@@ -173,16 +175,26 @@ class DashboardScreen extends ConsumerWidget {
           sm2: s.smallMetric2,
           sm3: s.smallMetric3,
           sm4: s.smallMetric4,
-        )));
+        ),
+      ),
+    );
     final leftMetricType = settings.left;
     final rightMetricType = settings.right;
 
-    final leftConfig = ObdMetricConfig.all.firstWhere(
-      (c) => c.type == leftMetricType,
+    final leftConfig = ObdMetricConfig.of(leftMetricType);
+    final rightConfig = ObdMetricConfig.of(rightMetricType);
+    final unsupportedMask = ref.watchVisible(
+      context,
+      obdServiceProvider.select(
+        (s) => _unsupportedMask(s, [
+          settings.sm1,
+          settings.sm2,
+          settings.sm3,
+          settings.sm4,
+        ]),
+      ),
     );
-    final rightConfig = ObdMetricConfig.all.firstWhere(
-      (c) => c.type == rightMetricType,
-    );
+    bool showsSlot(int slot) => unsupportedMask & (1 << slot) == 0;
 
     final isFullscreen = settings.fullscreen;
     final isPortrait =
@@ -218,11 +230,12 @@ class DashboardScreen extends ConsumerWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            obdState.status != ObdStatus.connected &&
-                    obdState.status != ObdStatus.initializing
-                ? ObdNotConnectedView(
-                    state: obdState,
-                    onConnect: () => showObdConnectionSheet(context, ref),
+            !isLinkUp
+                ? Consumer(
+                    builder: (context, ref, _) => ObdNotConnectedView(
+                      state: ref.watchVisible(context, obdServiceProvider),
+                      onConnect: () => showObdConnectionSheet(context, ref),
+                    ),
                   )
                 : Positioned.fill(
                     child: Padding(
@@ -234,42 +247,44 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final showTripHeader =
-                              obdState.status == ObdStatus.connected ||
-                              obdState.status == ObdStatus.initializing;
+                          final showTripHeader = isLinkUp;
 
                           Widget leftGauge({required bool compact}) {
-                            return GaugeWidget(
-                              value: _getValueForMetric(
-                                leftMetricType,
-                                telemetry,
-                              ),
-                              config: leftConfig,
-                              compact: compact,
-                              onTap: () => _showMetricSelector(
-                                context: context,
-                                ref: ref,
-                                spotIndex: 0,
-                                currentSelection: leftMetricType,
-                                telemetry: telemetry,
+                            return LiveMetric(
+                              type: leftMetricType,
+                              builder: (context, reading, _) => GaugeWidget(
+                                value: reading.value,
+                                config: leftConfig,
+                                compact: compact,
+                                onTap: () => _showMetricSelector(
+                                  context: context,
+                                  ref: ref,
+                                  spotIndex: 0,
+                                  currentSelection: leftMetricType,
+                                  telemetry: ref
+                                      .read(obdServiceProvider)
+                                      .telemetry,
+                                ),
                               ),
                             );
                           }
 
                           Widget rightGauge({required bool compact}) {
-                            return GaugeWidget(
-                              value: _getValueForMetric(
-                                rightMetricType,
-                                telemetry,
-                              ),
-                              config: rightConfig,
-                              compact: compact,
-                              onTap: () => _showMetricSelector(
-                                context: context,
-                                ref: ref,
-                                spotIndex: 1,
-                                currentSelection: rightMetricType,
-                                telemetry: telemetry,
+                            return LiveMetric(
+                              type: rightMetricType,
+                              builder: (context, reading, _) => GaugeWidget(
+                                value: reading.value,
+                                config: rightConfig,
+                                compact: compact,
+                                onTap: () => _showMetricSelector(
+                                  context: context,
+                                  ref: ref,
+                                  spotIndex: 1,
+                                  currentSelection: rightMetricType,
+                                  telemetry: ref
+                                      .read(obdServiceProvider)
+                                      .telemetry,
+                                ),
                               ),
                             );
                           }
@@ -301,27 +316,19 @@ class DashboardScreen extends ConsumerWidget {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
                                           children: [
-                                            if (!_isMetricUnsupported(
-                                              settings.sm1,
-                                              obdState,
-                                            ))
+                                            if (showsSlot(0))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 2,
                                                 metricType: settings.sm1,
-                                                telemetry: telemetry,
                                               ),
-                                            if (!_isMetricUnsupported(
-                                              settings.sm2,
-                                              obdState,
-                                            ))
+                                            if (showsSlot(1))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 3,
                                                 metricType: settings.sm2,
-                                                telemetry: telemetry,
                                               ),
                                           ],
                                         ),
@@ -332,27 +339,19 @@ class DashboardScreen extends ConsumerWidget {
                                           crossAxisAlignment:
                                               CrossAxisAlignment.stretch,
                                           children: [
-                                            if (!_isMetricUnsupported(
-                                              settings.sm3,
-                                              obdState,
-                                            ))
+                                            if (showsSlot(2))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 4,
                                                 metricType: settings.sm3,
-                                                telemetry: telemetry,
                                               ),
-                                            if (!_isMetricUnsupported(
-                                              settings.sm4,
-                                              obdState,
-                                            ))
+                                            if (showsSlot(3))
                                               _buildInteractiveSmallStatCard(
                                                 context: context,
                                                 ref: ref,
                                                 spotIndex: 5,
                                                 metricType: settings.sm4,
-                                                telemetry: telemetry,
                                               ),
                                           ],
                                         ),
@@ -366,49 +365,33 @@ class DashboardScreen extends ConsumerWidget {
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceEvenly,
                                     children: [
-                                      if (!_isMetricUnsupported(
-                                        settings.sm1,
-                                        obdState,
-                                      ))
+                                      if (showsSlot(0))
                                         _buildInteractiveSmallStatCard(
                                           context: context,
                                           ref: ref,
                                           spotIndex: 2,
                                           metricType: settings.sm1,
-                                          telemetry: telemetry,
                                         ),
-                                      if (!_isMetricUnsupported(
-                                        settings.sm2,
-                                        obdState,
-                                      ))
+                                      if (showsSlot(1))
                                         _buildInteractiveSmallStatCard(
                                           context: context,
                                           ref: ref,
                                           spotIndex: 3,
                                           metricType: settings.sm2,
-                                          telemetry: telemetry,
                                         ),
-                                      if (!_isMetricUnsupported(
-                                        settings.sm3,
-                                        obdState,
-                                      ))
+                                      if (showsSlot(2))
                                         _buildInteractiveSmallStatCard(
                                           context: context,
                                           ref: ref,
                                           spotIndex: 4,
                                           metricType: settings.sm3,
-                                          telemetry: telemetry,
                                         ),
-                                      if (!_isMetricUnsupported(
-                                        settings.sm4,
-                                        obdState,
-                                      ))
+                                      if (showsSlot(3))
                                         _buildInteractiveSmallStatCard(
                                           context: context,
                                           ref: ref,
                                           spotIndex: 5,
                                           metricType: settings.sm4,
-                                          telemetry: telemetry,
                                         ),
                                     ],
                                   ),
@@ -421,7 +404,6 @@ class DashboardScreen extends ConsumerWidget {
                                 _buildTripHeaderRow(
                                   context,
                                   ref,
-                                  telemetry,
                                   isPortrait: isPortrait,
                                 ),
                                 SizedBox(height: isPortrait ? 6 : 8),
@@ -498,61 +480,12 @@ class DashboardScreen extends ConsumerWidget {
 
   Widget _buildTripHeaderRow(
     BuildContext context,
-    WidgetRef ref,
-    ObdTelemetry telemetry, {
+    WidgetRef ref, {
     required bool isPortrait,
   }) {
-    final ecoBadge = AnimatedOpacity(
-      duration: const Duration(milliseconds: 300),
-      opacity: telemetry.isEcoMode ? 1.0 : 0.2,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-        decoration: BoxDecoration(
-          color: telemetry.isEcoMode
-              ? const Color(0xFF33FF33).withOpacity(0.15)
-              : Colors.white10,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: telemetry.isEcoMode
-                ? const Color(0xFF33FF33)
-                : Colors.white24,
-            width: 1.5,
-          ),
-          boxShadow: telemetry.isEcoMode
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF33FF33).withOpacity(0.35),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.eco_rounded,
-              color: telemetry.isEcoMode
-                  ? const Color(0xFF33FF33)
-                  : Colors.white30,
-              size: 14,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'ECO MODE',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-                color: telemetry.isEcoMode
-                    ? const Color(0xFF33FF33)
-                    : Colors.white30,
-              ),
-            ),
-          ],
-        ),
-      ),
+    final ecoBadge = ObdSelect<bool>(
+      selector: (s) => s.telemetry.isEcoMode,
+      builder: (context, isEcoMode, _) => _buildEcoBadge(isEcoMode),
     );
 
     final tripARecord = GestureDetector(
@@ -583,14 +516,25 @@ class DashboardScreen extends ConsumerWidget {
                 size: 12,
               ),
               const SizedBox(width: 6),
-              Text(
-                'TRIP A: ${ref.watch(tripRecorderProvider).tripADistance.toStringAsFixed(1)} km',
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                  fontFamily: 'monospace',
-                ),
+              // Rebuilds on the displayed distance only.
+              Consumer(
+                builder: (context, ref, _) {
+                  final tripA = ref.watchVisible(
+                    context,
+                    tripRecorderProvider.select(
+                      (t) => t.tripADistance.toStringAsFixed(1),
+                    ),
+                  );
+                  return Text(
+                    'TRIP A: $tripA km',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white70,
+                      fontFamily: 'monospace',
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -626,14 +570,25 @@ class DashboardScreen extends ConsumerWidget {
                 size: 12,
               ),
               const SizedBox(width: 6),
-              Text(
-                'TRIP B: ${ref.watch(tripRecorderProvider).tripBDistance.toStringAsFixed(1)} km',
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                  fontFamily: 'monospace',
-                ),
+              // Rebuilds on the displayed distance only.
+              Consumer(
+                builder: (context, ref, _) {
+                  final tripB = ref.watchVisible(
+                    context,
+                    tripRecorderProvider.select(
+                      (t) => t.tripBDistance.toStringAsFixed(1),
+                    ),
+                  );
+                  return Text(
+                    'TRIP B: $tripB km',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white70,
+                      fontFamily: 'monospace',
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -692,23 +647,74 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildEcoBadge(bool isEcoMode) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: isEcoMode ? 1.0 : 0.2,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: isEcoMode
+              ? const Color(0xFF33FF33).withOpacity(0.15)
+              : Colors.white10,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isEcoMode ? const Color(0xFF33FF33) : Colors.white24,
+            width: 1.5,
+          ),
+          boxShadow: isEcoMode
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF33FF33).withOpacity(0.35),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.eco_rounded,
+              color: isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
+              size: 14,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'ECO MODE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+                color: isEcoMode ? const Color(0xFF33FF33) : Colors.white30,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _statValueText(ObdMetricType metricType, double? value) {
+    final config = ObdMetricConfig.of(metricType);
+    final isVoltageOrFuelEco =
+        metricType == ObdMetricType.voltage ||
+        metricType == ObdMetricType.fuelEconomy;
+    return value == null
+        ? '-- ${config.unit}'
+        : (metricType == ObdMetricType.fuelEconomy && value == 0.0)
+        ? '-- ${config.unit}'
+        : '${value.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}';
+  }
+
   Widget _buildInteractiveSmallStatCard({
     required BuildContext context,
     required WidgetRef ref,
     required int spotIndex,
     required ObdMetricType metricType,
-    required ObdTelemetry telemetry,
   }) {
-    final config = ObdMetricConfig.all.firstWhere((c) => c.type == metricType);
-    final value = _getValueForMetric(metricType, telemetry);
-    final isVoltageOrFuelEco =
-        metricType == ObdMetricType.voltage ||
-        metricType == ObdMetricType.fuelEconomy;
-    final valueText = value == null
-        ? '-- ${config.unit}'
-        : (metricType == ObdMetricType.fuelEconomy && value == 0.0)
-        ? '-- ${config.unit}'
-        : '${value.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}';
+    final config = ObdMetricConfig.of(metricType);
 
     return Expanded(
       child: GestureDetector(
@@ -718,13 +724,18 @@ class DashboardScreen extends ConsumerWidget {
           ref: ref,
           spotIndex: spotIndex,
           currentSelection: metricType,
-          telemetry: telemetry,
+          telemetry: ref.read(obdServiceProvider).telemetry,
         ),
-        child: _buildSmallStatCard(
-          label: config.label,
-          value: valueText,
-          icon: _getMetricIcon(metricType),
-          color: config.color,
+        // Rebuilds only when the displayed text changes.
+        child: ObdSelect<String>(
+          selector: (s) =>
+              _statValueText(metricType, metricValue(s.telemetry, metricType)),
+          builder: (context, valueText, _) => _buildSmallStatCard(
+            label: config.label,
+            value: valueText,
+            icon: _getMetricIcon(metricType),
+            color: config.color,
+          ),
         ),
       ),
     );

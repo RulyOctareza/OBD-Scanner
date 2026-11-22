@@ -102,7 +102,8 @@ class UserPreferences extends Table {
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(_openConnection());
+  AppDatabase({String fileName = 'autocare.db'})
+      : super(_openConnection(fileName));
   AppDatabase.withExecutor(super.e);
 
   @override
@@ -166,10 +167,16 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
-LazyDatabase _openConnection() {
+LazyDatabase _openConnection(String fileName) {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'autocare.db'));
-    return NativeDatabase(file);
+    final file = File(p.join(dbFolder.path, fileName));
+    // SQLite runs on its own isolate, so no query or insert blocks a frame.
+    return NativeDatabase.createInBackground(
+      file,
+      // Temp b-trees (GROUP BY, ORDER BY) stay in memory: the default temp
+      // directory is not writable for apps on Android. Runs in that isolate.
+      setup: (database) => database.execute('PRAGMA temp_store = MEMORY;'),
+    );
   });
 }

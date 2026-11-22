@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/widgets/live_obd.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
@@ -13,10 +14,12 @@ class DiagnosticScannerScreen extends ConsumerStatefulWidget {
   const DiagnosticScannerScreen({super.key});
 
   @override
-  ConsumerState<DiagnosticScannerScreen> createState() => _DiagnosticScannerScreenState();
+  ConsumerState<DiagnosticScannerScreen> createState() =>
+      _DiagnosticScannerScreenState();
 }
 
-class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScreen>
+class _DiagnosticScannerScreenState
+    extends ConsumerState<DiagnosticScannerScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   bool _isScanning = false;
@@ -53,15 +56,17 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     });
     _pulseController.repeat();
 
-    final result = await ref.read(obdServiceProvider.notifier).performFullDiagnosticScan(
-      onProgress: (progress, statusText) {
-        if (!mounted) return;
-        setState(() {
-          _scanProgress = progress;
-          _scanStatusText = statusText;
-        });
-      },
-    );
+    final result = await ref
+        .read(obdServiceProvider.notifier)
+        .performFullDiagnosticScan(
+          onProgress: (progress, statusText) {
+            if (!mounted) return;
+            setState(() {
+              _scanProgress = progress;
+              _scanStatusText = statusText;
+            });
+          },
+        );
 
     if (!mounted) return;
     _pulseController.stop();
@@ -80,13 +85,22 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
       builder: (context) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
-              Icon(Icons.bluetooth_disabled_rounded, color: AppColors.warning, size: 28),
+              Icon(
+                Icons.bluetooth_disabled_rounded,
+                color: AppColors.warning,
+                size: 28,
+              ),
               SizedBox(width: 10),
               Expanded(
-                child: Text('OBD Tidak Terhubung', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                child: Text(
+                  'OBD Tidak Terhubung',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
               ),
             ],
           ),
@@ -97,7 +111,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
@@ -120,13 +137,22 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
       builder: (context) {
         return AlertDialog(
           backgroundColor: AppColors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Row(
             children: [
-              Icon(Icons.warning_amber_rounded, color: AppColors.danger, size: 28),
+              Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.danger,
+                size: 28,
+              ),
               SizedBox(width: 10),
               Expanded(
-                child: Text('Reset Check Engine?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                child: Text(
+                  'Reset Check Engine?',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
               ),
             ],
           ),
@@ -148,7 +174,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     Expanded(
                       child: Text(
                         'INSTRUKSI KEAMANAN ECU:\n• Pastikan Kunci Kontak pada posisi ON.\n• Mesin dalam KONDISI MATI (Engine OFF, Ignition ON).',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.danger),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.danger,
+                        ),
                       ),
                     ),
                   ],
@@ -164,12 +194,18 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+              child: const Text(
+                'Batal',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
             ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Ya, Hapus Kode', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Ya, Hapus Kode',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );
@@ -179,16 +215,22 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     if (confirmed == true) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mengirim perintah Reset DTC (Mode 04) ke ECU...')),
+        const SnackBar(
+          content: Text('Mengirim perintah Reset DTC (Mode 04) ke ECU...'),
+        ),
       );
 
-      final success = await ref.read(obdServiceProvider.notifier).clearDtcCodes();
+      final success = await ref
+          .read(obdServiceProvider.notifier)
+          .clearDtcCodes();
 
       if (!context.mounted) return;
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Kode DTC berhasil dihapus! Lampu Check Engine di-reset.'),
+            content: Text(
+              'Kode DTC berhasil dihapus! Lampu Check Engine di-reset.',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -206,12 +248,25 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
 
   @override
   Widget build(BuildContext context) {
-    final obdState = ref.watch(obdServiceProvider);
-    final isConnected = obdState.status == ObdStatus.connected;
+    // Only what this screen shows; it does not rebuild per PID response.
+    final link = ref.watchVisible(
+      context,
+      obdServiceProvider.select(
+        (s) => (
+          status: s.status,
+          isSimulatorMode: s.isSimulatorMode,
+          connectedDeviceName: s.connectedDeviceName,
+        ),
+      ),
+    );
+    final isConnected = link.status == ObdStatus.connected;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scanner Diagnostik ECU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+          'Scanner Diagnostik ECU',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -231,7 +286,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
               if (!isConnected) _buildDisconnectedBanner(context),
 
               // Scanner Status Card with Radar Pulse animation
-              _buildScannerHeroCard(obdState, isConnected),
+              _buildScannerHeroCard(
+                isConnected,
+                isSimulatorMode: link.isSimulatorMode,
+                connectedDeviceName: link.connectedDeviceName,
+              ),
               const SizedBox(height: 20),
 
               // Scan Action Buttons
@@ -241,23 +300,38 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     child: FilledButton.icon(
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        backgroundColor: isConnected ? AppColors.primary : AppColors.warning,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        backgroundColor: isConnected
+                            ? AppColors.primary
+                            : AppColors.warning,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       onPressed: _isScanning
                           ? null
-                          : (isConnected ? _startDiagnosticScan : () => showObdConnectionSheet(context, ref)),
+                          : (isConnected
+                                ? _startDiagnosticScan
+                                : () => showObdConnectionSheet(context, ref)),
                       icon: _isScanning
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
-                          : Icon(isConnected ? Icons.radar_rounded : Icons.bluetooth_searching),
+                          : Icon(
+                              isConnected
+                                  ? Icons.radar_rounded
+                                  : Icons.bluetooth_searching,
+                            ),
                       label: Text(
                         !isConnected
                             ? 'Hubungkan OBD-II untuk Memindai'
-                            : (_scanResult == null ? 'Mulai Pemindaian ECU' : 'Pindai Ulang ECU'),
+                            : (_scanResult == null
+                                  ? 'Mulai Pemindaian ECU'
+                                  : 'Pindai Ulang ECU'),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -300,7 +374,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
               color: AppColors.warning.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.bluetooth_disabled_rounded, color: AppColors.warning, size: 24),
+            child: const Icon(
+              Icons.bluetooth_disabled_rounded,
+              color: AppColors.warning,
+              size: 24,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -309,12 +387,19 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
               children: const [
                 Text(
                   'OBD-II Tidak Terhubung',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.warning),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppColors.warning,
+                  ),
                 ),
                 SizedBox(height: 2),
                 Text(
                   'Pemindaian ECU hanya dapat dilakukan saat terhubung ke adaptor OBD-II.',
-                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -325,17 +410,26 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
               backgroundColor: AppColors.warning,
               foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () => showObdConnectionSheet(context, ref),
-            child: const Text('Hubungkan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: const Text(
+              'Hubungkan',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildScannerHeroCard(ObdState obdState, bool isConnected) {
+  Widget _buildScannerHeroCard(
+    bool isConnected, {
+    required bool isSimulatorMode,
+    required String? connectedDeviceName,
+  }) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
@@ -355,7 +449,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                           height: 120 + (_pulseController.value * 30),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.primary.withOpacity(0.3 * (1 - _pulseController.value)),
+                            color: AppColors.primary.withOpacity(
+                              0.3 * (1 - _pulseController.value),
+                            ),
                           ),
                         ),
                       Container(
@@ -366,18 +462,26 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                           color: _isScanning
                               ? AppColors.primary.withOpacity(0.15)
                               : (!isConnected
-                                  ? AppColors.warning.withOpacity(0.15)
-                                  : ((_scanResult != null && _scanResult!.activeDtcs.isNotEmpty)
-                                      ? AppColors.danger.withOpacity(0.15)
-                                      : AppColors.success.withOpacity(0.15))),
+                                    ? AppColors.warning.withOpacity(0.15)
+                                    : ((_scanResult != null &&
+                                              _scanResult!
+                                                  .activeDtcs
+                                                  .isNotEmpty)
+                                          ? AppColors.danger.withOpacity(0.15)
+                                          : AppColors.success.withOpacity(
+                                              0.15,
+                                            ))),
                           border: Border.all(
                             color: _isScanning
                                 ? AppColors.primary
                                 : (!isConnected
-                                    ? AppColors.warning
-                                    : ((_scanResult != null && _scanResult!.activeDtcs.isNotEmpty)
-                                        ? AppColors.danger
-                                        : AppColors.success)),
+                                      ? AppColors.warning
+                                      : ((_scanResult != null &&
+                                                _scanResult!
+                                                    .activeDtcs
+                                                    .isNotEmpty)
+                                            ? AppColors.danger
+                                            : AppColors.success)),
                             width: 3,
                           ),
                         ),
@@ -385,18 +489,24 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                           _isScanning
                               ? Icons.radar_rounded
                               : (!isConnected
-                                  ? Icons.bluetooth_disabled_rounded
-                                  : ((_scanResult != null && _scanResult!.activeDtcs.isNotEmpty)
-                                      ? Icons.warning_amber_rounded
-                                      : Icons.verified_rounded)),
+                                    ? Icons.bluetooth_disabled_rounded
+                                    : ((_scanResult != null &&
+                                              _scanResult!
+                                                  .activeDtcs
+                                                  .isNotEmpty)
+                                          ? Icons.warning_amber_rounded
+                                          : Icons.verified_rounded)),
                           size: 48,
                           color: _isScanning
                               ? AppColors.primary
                               : (!isConnected
-                                  ? AppColors.warning
-                                  : ((_scanResult != null && _scanResult!.activeDtcs.isNotEmpty)
-                                      ? AppColors.danger
-                                      : AppColors.success)),
+                                    ? AppColors.warning
+                                    : ((_scanResult != null &&
+                                              _scanResult!
+                                                  .activeDtcs
+                                                  .isNotEmpty)
+                                          ? AppColors.danger
+                                          : AppColors.success)),
                         ),
                       ),
                     ],
@@ -420,17 +530,23 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                   value: _scanProgress,
                   minHeight: 6,
                   backgroundColor: AppColors.surface,
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.primary,
+                  ),
                 ),
               )
             else
               Text(
                 isConnected
-                    ? (obdState.isSimulatorMode ? 'Terhubung (Mode Simulator)' : 'Terhubung ke ECU (${obdState.connectedDeviceName})')
+                    ? (isSimulatorMode
+                          ? 'Terhubung (Mode Simulator)'
+                          : 'Terhubung ke ECU ($connectedDeviceName)')
                     : 'Koneksi OBD-II diperlukan untuk memindai ECU',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isConnected ? AppColors.textSecondary : AppColors.warning,
+                  color: isConnected
+                      ? AppColors.textSecondary
+                      : AppColors.warning,
                 ),
               ),
           ],
@@ -448,14 +564,23 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
           child: Column(
             children: [
               Icon(
-                isConnected ? Icons.directions_car_rounded : Icons.bluetooth_searching_rounded,
+                isConnected
+                    ? Icons.directions_car_rounded
+                    : Icons.bluetooth_searching_rounded,
                 size: 48,
-                color: isConnected ? AppColors.textSecondary : AppColors.warning,
+                color: isConnected
+                    ? AppColors.textSecondary
+                    : AppColors.warning,
               ),
               const SizedBox(height: 12),
               Text(
-                isConnected ? 'Belum Ada Hasil Pemindaian' : 'Scanner Butuh Koneksi OBD-II',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                isConnected
+                    ? 'Belum Ada Hasil Pemindaian'
+                    : 'Scanner Butuh Koneksi OBD-II',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -463,12 +588,17 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     ? 'Tekan "Mulai Pemindaian ECU" di atas untuk memeriksa kode kesalahan aktif, kode pending, dan kesiapan emisi.'
                     : 'Hubungkan Bluetooth ke ELM327 atau aktifkan Mode Simulator di Pengaturan agar dapat memindai ECU kendaraan Anda.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 16),
               if (!isConnected)
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                  ),
                   onPressed: () => showObdConnectionSheet(context, ref),
                   icon: const Icon(Icons.bluetooth, size: 18),
                   label: const Text('Hubungkan OBD Sekarang'),
@@ -486,7 +616,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     );
   }
 
-  Widget _buildResultsSection(BuildContext context, DiagnosticScanResult result) {
+  Widget _buildResultsSection(
+    BuildContext context,
+    DiagnosticScanResult result,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -518,7 +651,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                             backgroundColor: AppColors.danger,
                             child: Text(
                               '${result.activeDtcs.length}',
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -536,7 +673,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                             backgroundColor: AppColors.warning,
                             child: Text(
                               '${result.pendingDtcs.length}',
-                              style: const TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -554,7 +695,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                             backgroundColor: Colors.purple,
                             child: Text(
                               '${result.permanentDtcs.length}',
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -586,13 +731,23 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         side: const BorderSide(color: AppColors.primary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      onPressed: () => _showDiagnosticReportSheet(context, result),
-                      icon: const Icon(Icons.assignment_rounded, color: AppColors.primary),
+                      onPressed: () =>
+                          _showDiagnosticReportSheet(context, result),
+                      icon: const Icon(
+                        Icons.assignment_rounded,
+                        color: AppColors.primary,
+                      ),
                       label: const Text(
                         'Laporan Diagnostik',
-                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),
@@ -602,7 +757,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         side: const BorderSide(color: AppColors.textSecondary),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () async {
                         final text = formatDtcReport(result);
@@ -615,16 +772,24 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                           ),
                         );
                       },
-                      icon: const Icon(Icons.copy_rounded, color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.copy_rounded,
+                        color: AppColors.textSecondary,
+                      ),
                       label: const Text(
                         'Salin Laporan',
-                        style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 13),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-              if (result.activeDtcs.isNotEmpty || result.pendingDtcs.isNotEmpty) ...[
+              if (result.activeDtcs.isNotEmpty ||
+                  result.pendingDtcs.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -632,13 +797,22 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       side: const BorderSide(color: AppColors.danger),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     onPressed: () => _promptClearDtcs(context),
-                    icon: const Icon(Icons.delete_forever_rounded, color: AppColors.danger),
+                    icon: const Icon(
+                      Icons.delete_forever_rounded,
+                      color: AppColors.danger,
+                    ),
                     label: const Text(
                       'Reset MIL / Clear DTC',
-                      style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(
+                        color: AppColors.danger,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -667,7 +841,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     color: AppColors.primary.withOpacity(0.15),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.developer_board_rounded, color: AppColors.primary, size: 22),
+                  child: const Icon(
+                    Icons.developer_board_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -677,14 +855,19 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: result.milStatus
                         ? AppColors.danger.withOpacity(0.15)
                         : AppColors.success.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: result.milStatus ? AppColors.danger : AppColors.success,
+                      color: result.milStatus
+                          ? AppColors.danger
+                          : AppColors.success,
                       width: 1,
                     ),
                   ),
@@ -692,8 +875,12 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        result.milStatus ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
-                        color: result.milStatus ? AppColors.danger : AppColors.success,
+                        result.milStatus
+                            ? Icons.warning_amber_rounded
+                            : Icons.check_circle_rounded,
+                        color: result.milStatus
+                            ? AppColors.danger
+                            : AppColors.success,
                         size: 14,
                       ),
                       const SizedBox(width: 4),
@@ -702,7 +889,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: result.milStatus ? AppColors.danger : AppColors.success,
+                          color: result.milStatus
+                              ? AppColors.danger
+                              : AppColors.success,
                         ),
                       ),
                     ],
@@ -756,7 +945,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     );
   }
 
-  Widget _buildEcuDetailTile({required IconData icon, required String label, required String value}) {
+  Widget _buildEcuDetailTile({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -768,12 +961,18 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -821,7 +1020,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     );
   }
 
-  void _showDiagnosticReportSheet(BuildContext context, DiagnosticScanResult result) {
+  void _showDiagnosticReportSheet(
+    BuildContext context,
+    DiagnosticScanResult result,
+  ) {
     final obdState = ref.read(obdServiceProvider);
     showModalBottomSheet(
       context: context,
@@ -855,11 +1057,18 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                   const SizedBox(height: 16),
                   const Row(
                     children: [
-                      Icon(Icons.article_rounded, color: AppColors.primary, size: 24),
+                      Icon(
+                        Icons.article_rounded,
+                        color: AppColors.primary,
+                        size: 24,
+                      ),
                       SizedBox(width: 10),
                       Text(
                         'Laporan Hasil Diagnostik ECU',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ],
                   ),
@@ -869,36 +1078,67 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.2),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Perangkat OBD: ${obdState.connectedDeviceName ?? "ELM327 Adaptive"}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        Text(
+                          'Perangkat OBD: ${obdState.connectedDeviceName ?? "ELM327 Adaptive"}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Waktu Scan: ${result.scanTimestamp.toString().split('.')[0]}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        Text(
+                          'Waktu Scan: ${result.scanTimestamp.toString().split('.')[0]}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Nomor VIN: ${result.vin}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        Text(
+                          'Nomor VIN: ${result.vin}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Protokol ECU: ${result.protocol}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        Text(
+                          'Protokol ECU: ${result.protocol}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('Status Lampu Check Engine (MIL): ${result.milStatus ? "MENYALA" : "NORMAL"}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: result.milStatus ? AppColors.danger : AppColors.success,
-                            )),
+                        Text(
+                          'Status Lampu Check Engine (MIL): ${result.milStatus ? "MENYALA" : "NORMAL"}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: result.milStatus
+                                ? AppColors.danger
+                                : AppColors.success,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text('Daftar Kode Kerusakan (DTC):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text(
+                    'Daftar Kode Kerusakan (DTC):',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                   const SizedBox(height: 8),
-                  if (result.activeDtcs.isEmpty && result.pendingDtcs.isEmpty && result.permanentDtcs.isEmpty)
+                  if (result.activeDtcs.isEmpty &&
+                      result.pendingDtcs.isEmpty &&
+                      result.permanentDtcs.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -907,12 +1147,19 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.check_circle_outline, color: AppColors.success),
+                          Icon(
+                            Icons.check_circle_outline,
+                            color: AppColors.success,
+                          ),
                           SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Sistem ECU Bersih. Tidak ada DTC Aktif, Pending, maupun Permanen.',
-                              style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.success,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -920,25 +1167,57 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                     )
                   else ...[
                     if (result.activeDtcs.isNotEmpty) ...[
-                      const Text('• Kode Aktif (Mode 03):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.danger)),
+                      const Text(
+                        '• Kode Aktif (Mode 03):',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppColors.danger,
+                        ),
+                      ),
                       ...result.activeDtcs.map((code) {
                         final dtc = DtcRepository.getCodeInfo(code);
                         return ListTile(
                           dense: true,
-                          title: Text('${dtc.code} - ${dtc.title}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text(dtc.descriptionIndo, style: const TextStyle(fontSize: 11)),
+                          title: Text(
+                            '${dtc.code} - ${dtc.title}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          subtitle: Text(
+                            dtc.descriptionIndo,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         );
                       }),
                     ],
                     if (result.pendingDtcs.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      const Text('• Kode Pending (Mode 07):', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.warning)),
+                      const Text(
+                        '• Kode Pending (Mode 07):',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AppColors.warning,
+                        ),
+                      ),
                       ...result.pendingDtcs.map((code) {
                         final dtc = DtcRepository.getCodeInfo(code);
                         return ListTile(
                           dense: true,
-                          title: Text('${dtc.code} - ${dtc.title}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          subtitle: Text(dtc.descriptionIndo, style: const TextStyle(fontSize: 11)),
+                          title: Text(
+                            '${dtc.code} - ${dtc.title}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          subtitle: Text(
+                            dtc.descriptionIndo,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         );
                       }),
                     ],
@@ -947,7 +1226,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                      ),
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Tutup Laporan'),
                     ),
@@ -973,11 +1254,19 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check_circle_rounded, color: AppColors.success, size: 56),
+            Icon(
+              Icons.check_circle_rounded,
+              color: AppColors.success,
+              size: 56,
+            ),
             SizedBox(height: 12),
             Text(
               'Sistem Bebas Kode Kerusakan (DTC)',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.success),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.success,
+              ),
             ),
             SizedBox(height: 6),
             Text(
@@ -1010,7 +1299,11 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
         child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.thumb_up_alt_rounded, color: AppColors.primary, size: 48),
+            Icon(
+              Icons.thumb_up_alt_rounded,
+              color: AppColors.primary,
+              size: 48,
+            ),
             SizedBox(height: 12),
             Text(
               'Tidak Ada Kode Kerusakan Menunggu',
@@ -1036,7 +1329,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
     );
   }
 
-  Widget _buildImReadinessTab(BuildContext context, Map<String, bool> readiness) {
+  Widget _buildImReadinessTab(
+    BuildContext context,
+    Map<String, bool> readiness,
+  ) {
     final monitors = [
       {'key': 'misfire', 'label': 'Pengapian (Misfire System)'},
       {'key': 'fuelSystem', 'label': 'Sistem Bahan Bakar'},
@@ -1054,7 +1350,8 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
         padding: const EdgeInsets.all(16.0),
         child: ListView.separated(
           itemCount: monitors.length,
-          separatorBuilder: (context, index) => const Divider(color: AppColors.surface, height: 1),
+          separatorBuilder: (context, index) =>
+              const Divider(color: AppColors.surface, height: 1),
           itemBuilder: (context, index) {
             final monitor = monitors[index];
             final key = monitor['key'] as String;
@@ -1066,7 +1363,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
               child: Row(
                 children: [
                   Icon(
-                    isComplete ? Icons.check_circle_rounded : Icons.pending_rounded,
+                    isComplete
+                        ? Icons.check_circle_rounded
+                        : Icons.pending_rounded,
                     color: isComplete ? AppColors.success : AppColors.warning,
                     size: 20,
                   ),
@@ -1074,13 +1373,21 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                   Expanded(
                     child: Text(
                       label,
-                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: isComplete ? AppColors.success.withOpacity(0.12) : AppColors.warning.withOpacity(0.12),
+                      color: isComplete
+                          ? AppColors.success.withOpacity(0.12)
+                          : AppColors.warning.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -1088,7 +1395,9 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        color: isComplete ? AppColors.success : AppColors.warning,
+                        color: isComplete
+                            ? AppColors.success
+                            : AppColors.warning,
                       ),
                     ),
                   ),
@@ -1113,7 +1422,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.danger.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -1131,7 +1443,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
                 Expanded(
                   child: Text(
                     dtc.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1141,7 +1456,10 @@ class _DiagnosticScannerScreenState extends ConsumerState<DiagnosticScannerScree
             const SizedBox(height: 8),
             Text(
               dtc.descriptionIndo,
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),

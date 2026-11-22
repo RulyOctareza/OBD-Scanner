@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
+import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'obd_link.dart';
+import '../obd/obd_metric.dart';
 import '../obd/obd_parser.dart';
 import '../obd/obd_simulator.dart';
 import '../obd/obd_telemetry.dart';
@@ -15,7 +17,6 @@ import '../database/database.dart';
 import '../database/database_provider.dart';
 import '../services/background_service.dart';
 import '../../features/settings/presentation/settings_provider.dart';
-import '../../features/live_data/presentation/widgets/gauge_widget.dart';
 
 class DiagnosticScanResult {
   final String protocol;
@@ -172,7 +173,7 @@ class _ConnectCancelled implements Exception {
 class ObdService extends StateNotifier<ObdState> {
   final Ref _ref;
   final ObdSimulator _simulator = ObdSimulator();
-  BluetoothConnection? _connection;
+  ObdLink? _connection;
   StreamSubscription? _simSubscription;
   Timer? _pollingTimer;
   Timer? _autoReconnectTimer;
@@ -341,13 +342,9 @@ class ObdService extends StateNotifier<ObdState> {
           await db.getPreference('last_obd_device_address') ?? '';
       if (lastAddress.isEmpty) return;
 
-      final isEnabled = await FlutterBluetoothSerial.instance.isEnabled;
-      if (isEnabled != true) return;
-
-      // Do not prompt for permissions on the background reconnect path —
-      // that wakes the permission / location stack every cycle.
-      final connectGranted = await Permission.bluetoothConnect.isGranted;
-      if (!connectGranted) return;
+      // Never prompts: prompting on the background reconnect path wakes the
+      // permission / location stack every cycle.
+      if (!await _ref.read(obdLinkConnectorProvider).isReady()) return;
 
       debugPrint('Auto-connecting to last device: $lastAddress');
       final lastName =
@@ -576,7 +573,7 @@ class ObdService extends StateNotifier<ObdState> {
   /// Opens the RFCOMM socket without ever leaving one this process does not
   /// own: the dongle accepts a single client, so an orphaned socket blocks
   /// every later attempt until the app is killed.
-  Future<BluetoothConnection> _openSocket(String address, int token) async {
+  Future<ObdLink> _openSocket(String address, int token) async {
     final previous = _socketOpenInFlight;
     if (previous != null) {
       // Two native connects to the same dongle at once make both fail.
@@ -588,8 +585,9 @@ class ObdService extends StateNotifier<ObdState> {
       state = state.copyWith(statusDetail: 'Membuka koneksi Bluetooth…');
     }
 
+    final connector = _ref.read(obdLinkConnectorProvider);
     try {
-      await FlutterBluetoothSerial.instance.cancelDiscovery();
+      await connector.cancelDiscovery();
     } catch (e) {
       debugPrint('Error canceling discovery: $e');
     }
@@ -598,7 +596,7 @@ class ObdService extends StateNotifier<ObdState> {
     // A Dart timeout does not stop the native connect, so a socket that opens
     // after the timeout is disposed here instead of being dropped.
     var abandoned = false;
-    final open = BluetoothConnection.toAddress(address);
+    final open = connector.open(address);
     final settled = open.then<void>(
       (connection) {
         if (abandoned) connection.dispose();
@@ -614,7 +612,7 @@ class ObdService extends StateNotifier<ObdState> {
       }),
     );
 
-    final BluetoothConnection connection;
+    final ObdLink connection;
     try {
       connection = await open.timeout(_socketOpenTimeout);
     } on TimeoutException {
@@ -632,9 +630,9 @@ class ObdService extends StateNotifier<ObdState> {
     if (token != _connectToken) throw const _ConnectCancelled();
   }
 
-  void _attachListener(BluetoothConnection connection) {
+  void _attachListener(ObdLink connection) {
     final generation = ++_linkGeneration;
-    connection.input!.listen(
+    connection.input.listen(
       (data) {
         if (generation == _linkGeneration) _onDataReceived(data);
       },
@@ -725,8 +723,7 @@ class ObdService extends StateNotifier<ObdState> {
     // _disconnectReal can fail the completer before anyone awaits it.
     unawaited(response.then((_) {}, onError: (Object _) {}));
     try {
-      connection.output.add(ascii.encode(command));
-      await connection.output.allSent;
+      await connection.send(ascii.encode(command));
       return await response;
     } finally {
       if (identical(_pendingResponseCompleter, completer)) {
@@ -784,8 +781,8 @@ class ObdService extends StateNotifier<ObdState> {
       state = state.copyWith(
         status: ObdStatus.connected,
         telemetry: telemetry,
-        supportedSensors: ObdMetricType.values.toSet(),
-        checkedSensors: ObdMetricType.values.toSet(),
+        supportedSensors: _allSensors,
+        checkedSensors: _allSensors,
       );
     });
   }
@@ -821,7 +818,7 @@ class ObdService extends StateNotifier<ObdState> {
     if (!_pollingActive || !_isAwaitingResponse) return;
     final last = _lastActivityTime;
     if (last != null &&
-        DateTime.now().difference(last) <=
+        clock.now().difference(last) <=
             const Duration(milliseconds: _responseTimeoutMs)) {
       return;
     }
@@ -836,12 +833,12 @@ class ObdService extends StateNotifier<ObdState> {
   /// answer, so the next one-shot command does not receive that answer.
   Future<void> _pausePolling() async {
     _stopPolling();
-    final deadline = DateTime.now().add(
+    final deadline = clock.now().add(
       const Duration(milliseconds: _responseTimeoutMs),
     );
     while (_isAwaitingResponse &&
         _connection != null &&
-        DateTime.now().isBefore(deadline)) {
+        clock.now().isBefore(deadline)) {
       await Future.delayed(const Duration(milliseconds: 40));
     }
     _isAwaitingResponse = false;
@@ -873,8 +870,7 @@ class ObdService extends StateNotifier<ObdState> {
     final connection = _connection;
     if (connection == null || !connection.isConnected) return;
     try {
-      connection.output.add(ascii.encode(command));
-      await connection.output.allSent;
+      await connection.send(ascii.encode(command));
     } catch (e) {
       debugPrint('OBD send failed: $e');
     }
@@ -907,7 +903,7 @@ class ObdService extends StateNotifier<ObdState> {
     if (_pendingCommands.isEmpty) return;
     final cmd = _commandAtIndex(_currentCommandIndex);
     _isAwaitingResponse = true;
-    _lastActivityTime = DateTime.now();
+    _lastActivityTime = clock.now();
     unawaited(_sendString('$cmd\r'));
   }
 
@@ -921,7 +917,7 @@ class ObdService extends StateNotifier<ObdState> {
     final text = String.fromCharCodes(data.where(_isElmByte));
     if (text.isEmpty) return;
     _rxBuffer.write(text);
-    _lastActivityTime = DateTime.now();
+    _lastActivityTime = clock.now();
 
     if (!text.contains('>')) return;
 
@@ -1078,30 +1074,42 @@ class ObdService extends StateNotifier<ObdState> {
       current = current.copyWith(dtcs: val);
     }
 
-    final checked = Set<ObdMetricType>.from(state.checkedSensors);
-    final supported = Set<ObdMetricType>.from(state.supportedSensors);
+    // The sets keep their identity unless membership changes, so selects on
+    // them do not fire on every response (sets compare by identity).
+    var checked = state.checkedSensors;
+    var supported = state.supportedSensors;
 
     if (metricType != null) {
-      checked.add(metricType);
+      checked = _withSensor(checked, metricType);
       if (isValid) {
-        supported.add(metricType);
+        supported = _withSensor(supported, metricType);
       }
     }
 
     // Handle calculated fuelEconomy support. It is supported if MAP or MAF is supported.
     if (checked.contains(ObdMetricType.map) || checked.contains(ObdMetricType.rpm)) {
-      checked.add(ObdMetricType.fuelEconomy);
+      checked = _withSensor(checked, ObdMetricType.fuelEconomy);
       if (supported.contains(ObdMetricType.map) || supported.contains(ObdMetricType.rpm)) {
-        supported.add(ObdMetricType.fuelEconomy);
+        supported = _withSensor(supported, ObdMetricType.fuelEconomy);
       }
     }
 
     state = state.copyWith(
-      telemetry: current.copyWith(timestamp: DateTime.now()),
+      telemetry: current.copyWith(timestamp: clock.now()),
       checkedSensors: checked,
       supportedSensors: supported,
     );
   }
+
+  static Set<ObdMetricType> _withSensor(
+    Set<ObdMetricType> sensors,
+    ObdMetricType type,
+  ) =>
+      sensors.contains(type) ? sensors : {...sensors, type};
+
+  /// One instance for every simulator tick, so the sets never look changed.
+  static final Set<ObdMetricType> _allSensors =
+      Set.unmodifiable(ObdMetricType.values);
 
   Future<DiagnosticScanResult> performFullDiagnosticScan({
     void Function(double progress, String statusText)? onProgress,

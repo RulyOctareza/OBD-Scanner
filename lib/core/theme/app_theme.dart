@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const Color background = Color(0xFF0F1115);
@@ -20,7 +19,9 @@ class AppColors {
 
 class AppTheme {
   static ThemeData get darkTheme {
-    final baseText = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
+    // Inter is bundled (pubspec fonts:), so text renders in it from the
+    // first frame and nothing is fetched at runtime.
+    final baseText = ThemeData.dark().textTheme.apply(fontFamily: 'Inter');
 
     return ThemeData(
       brightness: Brightness.dark,
@@ -81,10 +82,14 @@ class AppTheme {
     FontWeight fontWeight = FontWeight.normal,
     Color color = AppColors.textPrimary,
   }) {
-    return GoogleFonts.jetBrainsMono(
+    // Tabular figures keep every digit the same width, so a changing value
+    // does not shift its neighbours.
+    return TextStyle(
+      fontFamily: 'Inter',
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
   }
 }

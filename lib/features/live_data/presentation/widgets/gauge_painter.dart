@@ -1,162 +1,249 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
-class GaugePainter extends CustomPainter {
-  final double value;
-  final double minValue;
-  final double maxValue;
-  final Color activeColor;
-  final Color backgroundColor;
-  final Color warningColor;
-  final double warningThreshold;
+// The gauge is painted in two layers. The track (ring, background arc, unlit
+// segments, ticks) depends only on the metric and is cached in its own layer.
+// The value layer (lit segments, pointer) repaints from the animation without
+// rebuilding any widget. Lit segments are opaque, so painting them over the
+// unlit ones gives the same pixels as painting either alone.
 
-  GaugePainter({
-    required this.value,
+const double _startAngle = 140.0 * (math.pi / 180);
+const double _sweepAngle = 260.0 * (math.pi / 180);
+const int _segmentsCount = 40;
+const double _segmentGap = 0.03; // radians
+const Color gaugeWarningColor = Color(0xFFFF3366);
+
+double _radius(Size size) => math.min(size.width / 2, size.height / 2) - 12;
+
+class GaugeTrackPainter extends CustomPainter {
+  const GaugeTrackPainter({
     required this.minValue,
     required this.maxValue,
     required this.activeColor,
     required this.backgroundColor,
-    this.warningColor = const Color(0xFFFF3366), // Hot pink / Neon Red
     required this.warningThreshold,
   });
+
+  final double minValue;
+  final double maxValue;
+  final Color activeColor;
+  final Color backgroundColor;
+  final double warningThreshold;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width / 2, size.height / 2) - 12;
+    final radius = _radius(size);
 
-    // Angles: Start at 140 degrees, sweep 260 degrees (leaving 100 degrees at bottom)
-    const startAngleDegrees = 140.0;
-    const sweepAngleDegrees = 260.0;
-    const startAngle = startAngleDegrees * (math.pi / 180);
-    const sweepAngle = sweepAngleDegrees * (math.pi / 180);
-
-    // 1. Draw Outer Glowing Ring (Thin Neon Ring)
-    final outerRingPaint = Paint()
-      ..color = activeColor.withOpacity(0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    // Outer thin ring.
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius + 6),
-      startAngle,
-      sweepAngle,
+      _startAngle,
+      _sweepAngle,
       false,
-      outerRingPaint,
+      Paint()
+        ..color = activeColor.withOpacity(0.15)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
     );
 
-    // 2. Draw Background Segmented Arc (Cyberpunk dashed track)
-    final bgPaint = Paint()
-      ..color = backgroundColor.withOpacity(0.2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 12;
-
+    // Background arc.
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      startAngle,
-      sweepAngle,
+      _startAngle,
+      _sweepAngle,
       false,
-      bgPaint,
+      Paint()
+        ..color = backgroundColor.withOpacity(0.2)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12,
     );
 
-    // 3. Draw Segmented Active Arc
-    final clampedValue = value.clamp(minValue, maxValue);
-    final valuePercentage = (clampedValue - minValue) / (maxValue - minValue);
-    final activeSweepAngle = sweepAngle * valuePercentage;
-
-    final isWarning = clampedValue >= warningThreshold;
-    final currentActiveColor = isWarning ? warningColor : activeColor;
-
-    // We draw segmented blocks for a digital/futuristic look
-    final segmentsCount = 40;
-    final segmentGap = 0.03; // gap in radians
-    final totalSegmentAngle = sweepAngle / segmentsCount;
-    final activeSegmentsCount = (valuePercentage * segmentsCount).floor();
-
-    final activeSegmentPaint = Paint()
+    // Unlit segments.
+    final segmentPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 10
-      ..strokeCap = StrokeCap.square;
-
-    for (int i = 0; i < segmentsCount; i++) {
-      final segmentStartAngle = startAngle + (i * totalSegmentAngle);
-      final segmentSweepAngle = totalSegmentAngle - segmentGap;
-      
-      // Determine color for this segment
-      final segmentValue = minValue + (i / segmentsCount) * (maxValue - minValue);
-      final isSegmentWarning = segmentValue >= warningThreshold;
-      
-      Color segColor;
-      if (i < activeSegmentsCount) {
-        segColor = isSegmentWarning ? warningColor : activeColor;
-      } else {
-        segColor = backgroundColor.withOpacity(0.08); // Unfilled segments
-      }
-
-      activeSegmentPaint.color = segColor;
-
-      // Draw segment arc
+      ..strokeCap = StrokeCap.square
+      ..color = backgroundColor.withOpacity(0.08);
+    const segmentAngle = _sweepAngle / _segmentsCount;
+    for (int i = 0; i < _segmentsCount; i++) {
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
-        segmentStartAngle,
-        segmentSweepAngle,
+        _startAngle + i * segmentAngle,
+        segmentAngle - _segmentGap,
         false,
-        activeSegmentPaint,
+        segmentPaint,
       );
     }
 
-    // 4. Draw Inner Grid/Ticks
+    // Ticks.
     final tickPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-
-    final tickCount = 10;
+    const tickCount = 10;
     for (int i = 0; i <= tickCount; i++) {
-      final angle = startAngle + (sweepAngle * (i / tickCount));
+      final angle = _startAngle + (_sweepAngle * (i / tickCount));
       final innerRadius = radius - 18;
       final outerRadius = radius - 12;
-
-      final isTickWarning = (minValue + (i / tickCount) * (maxValue - minValue)) >= warningThreshold;
-      tickPaint.color = isTickWarning 
-          ? warningColor.withOpacity(0.6) 
+      final isTickWarning =
+          (minValue + (i / tickCount) * (maxValue - minValue)) >= warningThreshold;
+      tickPaint.color = isTickWarning
+          ? gaugeWarningColor.withOpacity(0.6)
           : activeColor.withOpacity(0.4);
-
-      final p1 = Offset(
-        center.dx + innerRadius * math.cos(angle),
-        center.dy + innerRadius * math.sin(angle),
+      canvas.drawLine(
+        Offset(
+          center.dx + innerRadius * math.cos(angle),
+          center.dy + innerRadius * math.sin(angle),
+        ),
+        Offset(
+          center.dx + outerRadius * math.cos(angle),
+          center.dy + outerRadius * math.sin(angle),
+        ),
+        tickPaint,
       );
-      final p2 = Offset(
-        center.dx + outerRadius * math.cos(angle),
-        center.dy + outerRadius * math.sin(angle),
-      );
-
-      canvas.drawLine(p1, p2, tickPaint);
-    }
-
-    // 5. Draw Digital Sweeping Indicator Dot / Pointer (glowing head)
-    if (activeSweepAngle > 0) {
-      final pointerAngle = startAngle + activeSweepAngle;
-      final pointerRadius = radius;
-      final pointerPos = Offset(
-        center.dx + pointerRadius * math.cos(pointerAngle),
-        center.dy + pointerRadius * math.sin(pointerAngle),
-      );
-
-      final pointerPaint = Paint()
-        ..color = currentActiveColor
-        ..style = PaintingStyle.fill;
-
-      // Outer glow of the pointer
-      canvas.drawCircle(pointerPos, 8, Paint()..color = currentActiveColor.withOpacity(0.5));
-      // Inner solid point
-      canvas.drawCircle(pointerPos, 4, pointerPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant GaugePainter oldDelegate) {
-    return oldDelegate.value != value ||
-        oldDelegate.maxValue != maxValue ||
-        oldDelegate.activeColor != activeColor ||
-        oldDelegate.warningThreshold != warningThreshold;
+  bool shouldRepaint(covariant GaugeTrackPainter old) =>
+      old.minValue != minValue ||
+      old.maxValue != maxValue ||
+      old.activeColor != activeColor ||
+      old.backgroundColor != backgroundColor ||
+      old.warningThreshold != warningThreshold;
+}
+
+class GaugeValuePainter extends CustomPainter {
+  GaugeValuePainter({
+    required this.value,
+    required this.minValue,
+    required this.maxValue,
+    required this.activeColor,
+    required this.warningThreshold,
+  }) : super(repaint: value);
+
+  /// Displayed value; every change repaints this layer only.
+  final ValueListenable<double> value;
+  final double minValue;
+  final double maxValue;
+  final Color activeColor;
+  final double warningThreshold;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = _radius(size);
+
+    final clampedValue = value.value.clamp(minValue, maxValue);
+    final valuePercentage = (clampedValue - minValue) / (maxValue - minValue);
+    final activeSweepAngle = _sweepAngle * valuePercentage;
+    final currentActiveColor =
+        clampedValue >= warningThreshold ? gaugeWarningColor : activeColor;
+
+    // Lit segments.
+    final activeSegmentsCount = (valuePercentage * _segmentsCount).floor();
+    final segmentPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 10
+      ..strokeCap = StrokeCap.square;
+    const segmentAngle = _sweepAngle / _segmentsCount;
+    for (int i = 0; i < activeSegmentsCount; i++) {
+      final segmentValue = minValue + (i / _segmentsCount) * (maxValue - minValue);
+      segmentPaint.color =
+          segmentValue >= warningThreshold ? gaugeWarningColor : activeColor;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        _startAngle + i * segmentAngle,
+        segmentAngle - _segmentGap,
+        false,
+        segmentPaint,
+      );
+    }
+
+    // Pointer with glow.
+    if (activeSweepAngle > 0) {
+      final pointerAngle = _startAngle + activeSweepAngle;
+      final pointerPos = Offset(
+        center.dx + radius * math.cos(pointerAngle),
+        center.dy + radius * math.sin(pointerAngle),
+      );
+      canvas.drawCircle(
+        pointerPos,
+        8,
+        Paint()..color = currentActiveColor.withOpacity(0.5),
+      );
+      canvas.drawCircle(
+        pointerPos,
+        4,
+        Paint()
+          ..color = currentActiveColor
+          ..style = PaintingStyle.fill,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant GaugeValuePainter old) =>
+      old.value != value ||
+      old.minValue != minValue ||
+      old.maxValue != maxValue ||
+      old.activeColor != activeColor ||
+      old.warningThreshold != warningThreshold;
+}
+
+/// The dial of a gauge: a cached track layer under a value layer that follows
+/// [value]. Takes explicit paint parameters, not a metric config.
+class GaugeDial extends StatelessWidget {
+  const GaugeDial({
+    super.key,
+    required this.value,
+    required this.size,
+    required this.minValue,
+    required this.maxValue,
+    required this.color,
+    required this.backgroundColor,
+    required this.warningThreshold,
+  });
+
+  final ValueListenable<double> value;
+  final double size;
+  final double minValue;
+  final double maxValue;
+  final Color color;
+  final Color backgroundColor;
+  final double warningThreshold;
+
+  @override
+  Widget build(BuildContext context) {
+    final dimensions = Size(size, size);
+    return Stack(
+      children: [
+        RepaintBoundary(
+          child: CustomPaint(
+            size: dimensions,
+            painter: GaugeTrackPainter(
+              minValue: minValue,
+              maxValue: maxValue,
+              activeColor: color,
+              backgroundColor: backgroundColor,
+              warningThreshold: warningThreshold,
+            ),
+          ),
+        ),
+        RepaintBoundary(
+          child: CustomPaint(
+            size: dimensions,
+            painter: GaugeValuePainter(
+              value: value,
+              minValue: minValue,
+              maxValue: maxValue,
+              activeColor: color,
+              warningThreshold: warningThreshold,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
