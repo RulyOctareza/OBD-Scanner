@@ -1,0 +1,1 @@
+First release of AutoCare: car health score, trouble code (DTC) scanner with a built-in dictionary, dashboard and live data, trip, fuel and service logs, plus Simulator Mode to try everything without a car.

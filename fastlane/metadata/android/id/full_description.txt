@@ -1,0 +1,43 @@
+AutoCare mengubah adaptor OBD-II Bluetooth ELM327 menjadi monitor kesehatan mobil di HP-mu. Colokkan adaptor ke port OBD mobil, sambungkan lewat Bluetooth, lalu lihat kondisi mesin secara langsung, semuanya dalam Bahasa Indonesia.
+
+SKOR KESEHATAN MOBIL
+• Skor 0–100 yang dihitung langsung dari data mesin: suhu pendingin, tegangan aki dan pengisian alternator, putaran idle, kode kerusakan aktif, dan jadwal ganti oli.
+• Peringatan yang jelas, lengkap dengan tombol yang langsung membawamu ke layar yang tepat.
+
+SCANNER DIAGNOSTIK (DTC)
+• Baca kode kerusakan aktif (Mode 03), pending (07), dan permanen (0A).
+• Status lampu Check Engine (MIL) dan kesiapan emisi (I/M Readiness): pengapian, sistem bahan bakar, katalis, EVAP, sensor O2, EGR, dan lainnya.
+• Kamus kode DTC berbahasa Indonesia: deskripsi, gejala, kemungkinan penyebab, dan rekomendasi tindakan.
+• Reset Check Engine (Clear DTC) dan salin laporan diagnostik untuk dikirim ke bengkel.
+• Baca VIN dan odometer langsung dari ECU (bila didukung mobil).
+
+DASHBOARD DAN LIVE DATA
+• Meter kokpit dengan gauge yang bisa kamu atur, plus mode layar penuh.
+• Sensor real-time: RPM, kecepatan, suhu pendingin, tegangan aki, tekanan intake (MAP), aliran udara (MAF), suhu udara masuk, bukaan gas, beban mesin, timing advance, dan level BBM.
+• Estimasi konsumsi BBM (km/L) dan indikator ECO saat berkendara hemat.
+• Grafik riwayat untuk setiap sensor, dari 1 menit sampai 1 jam.
+
+PERJALANAN, BBM, DAN SERVIS
+• Perjalanan tercatat otomatis saat mesin hidup dan mobil bergerak: jarak, durasi, kecepatan rata-rata, suhu maksimum, dan konsumsi BBM.
+• Trip A dan Trip B (harian), seperti di panel instrumen mobil.
+• Catat pengisian BBM (Pertalite, Pertamax, Pertamax Turbo) dengan hitungan km/L metode isi penuh ke isi penuh, serta riwayat servis: ganti oli, filter udara, rem, kuras radiator, dan aki. Target ganti oli berikutnya diatur otomatis.
+• Semuanya tersusun di linimasa dengan filter tanggal dan jenis.
+
+SAMBUNG TANPA RIBET
+• Cari dan sandingkan adaptor ELM327 langsung dari aplikasi; PIN 1234 diisi otomatis.
+• Sambung otomatis ke adaptor terakhir, dengan langkah perbaikan bila koneksi gagal.
+• Koneksi tetap hidup saat kamu pindah ke aplikasi lain, misalnya navigasi.
+
+COBA TANPA MOBIL
+Mode Simulator menampilkan semua fitur dengan data demo, termasuk simulasi mesin overheat, aki lemah, dan lampu Check Engine.
+
+PRIVASI
+Tanpa akun, tanpa iklan, dan tanpa koneksi internet. Semua data tersimpan hanya di HP-mu.
+
+YANG KAMU BUTUHKAN
+• Adaptor OBD-II ELM327 Bluetooth Classic. Adaptor khusus Bluetooth Low Energy (BLE) dan adaptor Wi-Fi belum didukung.
+• Mobil dengan port OBD-II, biasanya ada di bawah dasbor dekat setir. Data yang tersedia tergantung ECU masing-masing mobil.
+• Android 7.0 atau yang lebih baru.
+
+CATATAN
+AutoCare membantu memantau kondisi mobil, tetapi bukan pengganti pemeriksaan di bengkel. Atur aplikasi sebelum berangkat dan jangan mengoperasikannya sambil mengemudi.

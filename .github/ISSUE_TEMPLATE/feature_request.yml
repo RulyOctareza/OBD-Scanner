@@ -1,0 +1,24 @@
+name: Usulan fitur
+description: Ide untuk membuat AutoCare lebih berguna.
+title: "[Usulan] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Masalah apa yang ingin diselesaikan?
+      placeholder: "Contoh: saya ingin tahu kapan harus ganti aki sebelum mogok."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Ide solusinya
+      description: Bagaimana fitur ini sebaiknya bekerja di aplikasi?
+    validations:
+      required: true
+  - type: input
+    id: car
+    attributes:
+      label: Mobil dan adaptor yang kamu pakai (opsional)
+      placeholder: "Contoh: Honda Brio 2020, Vgate iCar 2"

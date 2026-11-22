@@ -1,0 +1,1 @@
+Rilis pertama AutoCare: skor kesehatan mobil, scanner kode kerusakan (DTC) dengan kamus Bahasa Indonesia, dashboard dan live data, pencatatan perjalanan, BBM, dan servis, serta Mode Simulator untuk mencoba tanpa mobil.

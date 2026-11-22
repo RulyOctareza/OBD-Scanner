@@ -1,0 +1,67 @@
+name: Laporan bug
+description: Ada yang tidak berjalan semestinya di AutoCare.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Terima kasih sudah melapor! Data HP, adaptor, dan mobil sangat membantu, karena perilaku ELM327 dan ECU berbeda-beda.
+        Jangan cantumkan VIN lengkap atau data pribadi lain di laporan publik ini.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: Apa yang terjadi?
+      description: Jelaskan masalahnya dan apa yang kamu harapkan terjadi.
+      placeholder: "Contoh: setelah ketuk adaptor, muncul 'Koneksi gagal' padahal lampu adaptor menyala."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Langkah untuk mengulang
+      placeholder: |
+        1. Buka tab Pengaturan
+        2. Ketuk Kelola
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode koneksi saat masalah terjadi
+      options:
+        - Adaptor ELM327 asli
+        - Mode Simulator
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Versi AutoCare
+      placeholder: "Contoh: 1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: HP dan versi Android
+      placeholder: "Contoh: Samsung Galaxy A6+ (SM-A605G), Android 10"
+    validations:
+      required: true
+  - type: input
+    id: adapter
+    attributes:
+      label: Adaptor OBD-II
+      description: Nama yang tampil di daftar Bluetooth, merek, dan versi bila tahu.
+      placeholder: "Contoh: OBDII / Vgate iCar 2 / ELM327 v1.5"
+  - type: input
+    id: car
+    attributes:
+      label: Mobil
+      placeholder: "Contoh: Toyota Agya 1.2 G 2019, bensin"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshot atau info tambahan
+      description: Tempel screenshot, teks error, atau isi "Langkah perbaikan" dari lembar koneksi.
