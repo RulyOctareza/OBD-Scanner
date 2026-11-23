@@ -78,7 +78,10 @@ class DiagnosticScannerScreen extends ConsumerWidget {
                     'kali berkendara.',
                 codes: result.permanentDtcs,
               ),
-            _ReadinessSection(readiness: result.imReadiness),
+            _ReadinessSection(
+              readiness: result.imReadiness,
+              resetByClear: scan.readinessReset,
+            ),
             _VehicleSection(result: result),
             if (connected &&
                 (result.activeDtcs.isNotEmpty || result.pendingDtcs.isNotEmpty))
@@ -320,9 +323,13 @@ class DtcRow extends StatelessWidget {
 }
 
 class _ReadinessSection extends StatelessWidget {
-  const _ReadinessSection({required this.readiness});
+  const _ReadinessSection({required this.readiness, this.resetByClear = false});
 
   final Map<String, bool> readiness;
+
+  /// Codes were cleared since the scan: the monitors restarted, so an empty
+  /// map means "not read again yet", not "the car does not report this".
+  final bool resetByClear;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +363,10 @@ class _ReadinessSection extends StatelessWidget {
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
-                    'Tidak tersedia: mobil tidak melaporkan data ini.',
+                    resetByClear
+                        ? 'Direset karena kode baru saja dihapus. Pindai '
+                            'ulang untuk melihat statusnya.'
+                        : 'Tidak tersedia: mobil tidak melaporkan data ini.',
                     style: text.bodyMedium,
                   ),
                 ),

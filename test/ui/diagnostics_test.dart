@@ -191,6 +191,19 @@ void main() {
       await tester.tap(_button('Hapus kode'));
       await settle(tester);
       expect(find.text(expected), findsOneWidget);
+      // A clear that removed codes restarts the readiness monitors: the old
+      // readiness is gone, and the car is not blamed for not reporting it.
+      final reset = outcome == DtcClearOutcome.cleared ||
+          outcome == DtcClearOutcome.partial;
+      expect(
+        find.textContaining('Direset karena kode baru saja dihapus',
+            skipOffstage: false),
+        reset ? findsOneWidget : findsNothing,
+      );
+      expect(find.textContaining('mobil tidak melaporkan', skipOffstage: false),
+          findsNothing);
+      expect(find.text('Belum siap', skipOffstage: false),
+          reset ? findsNothing : findsOneWidget);
       await finish(tester);
     });
   }

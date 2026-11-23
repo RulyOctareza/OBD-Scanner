@@ -12,6 +12,7 @@ class DiagnosticScanState {
     this.progress = 0,
     this.result,
     this.clearing = false,
+    this.readinessReset = false,
   });
 
   final ScanPhase phase;
@@ -26,17 +27,23 @@ class DiagnosticScanState {
   /// A code clear is running.
   final bool clearing;
 
+  /// A clear since the last scan restarted the readiness monitors, so the
+  /// readiness is unknown until the next scan, not missing from the car.
+  final bool readinessReset;
+
   DiagnosticScanState copyWith({
     ScanPhase? phase,
     double? progress,
     DiagnosticScanResult? result,
     bool? clearing,
+    bool? readinessReset,
   }) {
     return DiagnosticScanState(
       phase: phase ?? this.phase,
       progress: progress ?? this.progress,
       result: result ?? this.result,
       clearing: clearing ?? this.clearing,
+      readinessReset: readinessReset ?? this.readinessReset,
     );
   }
 }
@@ -100,6 +107,7 @@ class DiagnosticScanNotifier extends StateNotifier<DiagnosticScanState> {
             odometerKm: previous.odometerKm,
             activeDtcsRead: true,
           ),
+          readinessReset: true,
         );
       }
       return outcome;
