@@ -20,7 +20,11 @@ class _Destination {
 const _destinations = [
   _Destination('Beranda', Icons.home_outlined, Icons.home_rounded),
   _Destination('Live', Icons.speed_outlined, Icons.speed_rounded),
-  _Destination('Diagnostik', Icons.troubleshoot_outlined, Icons.troubleshoot_rounded),
+  _Destination(
+    'Diagnostik',
+    Icons.troubleshoot_outlined,
+    Icons.troubleshoot_rounded,
+  ),
   _Destination('Riwayat', Icons.history_outlined, Icons.history_rounded),
   _Destination('Pengaturan', Icons.settings_outlined, Icons.settings_rounded),
 ];
@@ -38,7 +42,9 @@ class ShellLayout extends InheritedWidget {
   final bool settingsInBar;
 
   static bool settingsInBarOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<ShellLayout>()?.settingsInBar ??
+      context
+          .dependOnInheritedWidgetOfExactType<ShellLayout>()
+          ?.settingsInBar ??
       true;
 
   @override
@@ -95,8 +101,10 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   /// Width of the widest label of [destinations] at text scale 1.
   double _widestLabel(BuildContext context, List<_Destination> destinations) {
     final theme = Theme.of(context);
-    final style = theme.navigationBarTheme.labelTextStyle
-            ?.resolve({WidgetState.selected}) ??
+    final style =
+        theme.navigationBarTheme.labelTextStyle?.resolve({
+          WidgetState.selected,
+        }) ??
         theme.textTheme.labelMedium!;
     var widest = 0.0;
     for (final d in destinations) {
@@ -122,23 +130,23 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final shell = widget.navigationShell;
     final isFullscreen =
         ref.watch(settingsProvider.select((s) => s.isFullscreenCockpit)) &&
-            _onMeter;
+        _onMeter;
 
-    ref.listen<bool>(
-      settingsProvider.select((s) => s.isFullscreenCockpit),
-      (previous, next) {
-        if (next && _onMeter) {
-          SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-          SystemChrome.setPreferredOrientations([
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ]);
-        } else {
-          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-          SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-        }
-      },
-    );
+    ref.listen<bool>(settingsProvider.select((s) => s.isFullscreenCockpit), (
+      previous,
+      next,
+    ) {
+      if (next && _onMeter) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      } else {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      }
+    });
 
     // Five tabs when all labels fit at the user's text size; otherwise
     // Pengaturan moves to Beranda's gear. Labels of the tabs shown then grow
@@ -146,43 +154,53 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     final width = MediaQuery.sizeOf(context).width;
     final scale = MediaQuery.textScalerOf(context).scale(1);
     const room = 8.0;
-    final settingsInBar = _widestLabel(context, _destinations) * scale + room <=
+    final settingsInBar =
+        _widestLabel(context, _destinations) * scale + room <=
         width / _destinations.length;
     final shown = settingsInBar ? _destinations : _destinations.sublist(0, 4);
     final fitScale =
         (width / shown.length - room) / _widestLabel(context, shown);
     final labelScale = math.max(1.0, math.min(scale, fitScale));
     // Pengaturan reached through Beranda's gear keeps Beranda highlighted.
-    final selected =
-        shell.currentIndex < shown.length ? shell.currentIndex : AppTab.beranda;
+    final selected = shell.currentIndex < shown.length
+        ? shell.currentIndex
+        : AppTab.beranda;
 
-    return PopScope(
-      // Back on another tab returns to Beranda before leaving the app.
-      canPop: shell.currentIndex == AppTab.beranda,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) shell.goBranch(AppTab.beranda);
-      },
-      child: Scaffold(
-        body: ShellLayout(settingsInBar: settingsInBar, child: shell),
-        bottomNavigationBar: isFullscreen
-            ? null
-            : MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: TextScaler.linear(labelScale),
+    // A root sheet or dialog over the shell (the chart sheet is one) pauses
+    // everything below it like an offstage tab: no animations and no live
+    // rebuilds (watchVisible only reads); closing it rebuilds with fresh
+    // values. Otherwise gauge frames under the sheet re-raster the whole
+    // screen, the sheet included.
+    return TickerMode(
+      enabled: ModalRoute.of(context)?.isCurrent ?? true,
+      child: PopScope(
+        // Back on another tab returns to Beranda before leaving the app.
+        canPop: shell.currentIndex == AppTab.beranda,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) shell.goBranch(AppTab.beranda);
+        },
+        child: Scaffold(
+          body: ShellLayout(settingsInBar: settingsInBar, child: shell),
+          bottomNavigationBar: isFullscreen
+              ? null
+              : MediaQuery(
+                  data: MediaQuery.of(
+                    context,
+                  ).copyWith(textScaler: TextScaler.linear(labelScale)),
+                  child: NavigationBar(
+                    selectedIndex: selected,
+                    onDestinationSelected: _select,
+                    destinations: [
+                      for (final d in shown)
+                        NavigationDestination(
+                          icon: Icon(d.icon),
+                          selectedIcon: Icon(d.selectedIcon),
+                          label: d.label,
+                        ),
+                    ],
+                  ),
                 ),
-                child: NavigationBar(
-                  selectedIndex: selected,
-                  onDestinationSelected: _select,
-                  destinations: [
-                    for (final d in shown)
-                      NavigationDestination(
-                        icon: Icon(d.icon),
-                        selectedIcon: Icon(d.selectedIcon),
-                        label: d.label,
-                      ),
-                  ],
-                ),
-              ),
+        ),
       ),
     );
   }
