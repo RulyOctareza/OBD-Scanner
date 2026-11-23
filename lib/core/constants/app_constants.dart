@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 
-class AppSpacing {
-  static const double xs = 4.0;
+// Spacing and radius tokens live in lib/core/ui/tokens.dart; re-exported so
+// older imports keep compiling while screens move to the tokens.
+export '../ui/tokens.dart';
+
+/// Older radius names, kept until the last screen uses AppRadius.
+class AppBorderRadius {
   static const double sm = 8.0;
   static const double md = 12.0;
   static const double lg = 16.0;
-  static const double xl = 20.0;
-  static const double xxl = 24.0;
-}
-
-class AppBorderRadius {
-  static const double sm = 6.0;
-  static const double md = 12.0;
-  static const double lg = 16.0;
-  static const double xl = 20.0;
+  static const double xl = 24.0;
 
   static BorderRadius get smBorder => BorderRadius.circular(sm);
   static BorderRadius get mdBorder => BorderRadius.circular(md);
