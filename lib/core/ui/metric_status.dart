@@ -120,6 +120,9 @@ MetricAssessment assessReading(
     return const MetricAssessment(StatusLevel.unsupported);
   }
   if (!reading.hasValue) return _noData;
+  // Fuel economy is derived from speed: standing still it reads 0, which is
+  // not a measurement (the chart drops it the same way).
+  if (type == ObdMetricType.fuelEconomy && reading.value! <= 0) return _noData;
   return assessMetric(type, reading.value!, engineRunning: engineRunning);
 }
 

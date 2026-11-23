@@ -52,6 +52,17 @@ void main() {
     expect(assessMetric(ObdMetricType.rpm, 6500).level, StatusLevel.ok);
   });
 
+  test('fuel economy standing still is no data, not 0 km/L', () {
+    expect(
+      assessReading(ObdMetricType.fuelEconomy, const MetricReading(value: 0)).level,
+      StatusLevel.noData,
+    );
+    expect(
+      assessReading(ObdMetricType.fuelEconomy, const MetricReading(value: 14.2)).level,
+      StatusLevel.ok,
+    );
+  });
+
   test('a reading without a value is never judged as normal', () {
     const pending = MetricReading(value: 0, isPending: true);
     const unsupported = MetricReading(value: 0, isUnsupported: true);
