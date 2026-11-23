@@ -360,7 +360,7 @@ class ObdService extends StateNotifier<ObdState> {
   }
 
   /// The one rule for every automatic connect, at startup and from the
-  /// reconnect timer: the "Sambung otomatis" switch is on, the app is not in
+  /// reconnect timer: the "Hubungkan otomatis" switch is on, the app is not in
   /// simulator mode, the link is idle, and the user has not cancelled or
   /// disconnected by hand. That latch clears only on a manual connect or when
   /// the switch is turned back on ([allowAutoReconnect]).
@@ -1022,8 +1022,8 @@ class ObdService extends StateNotifier<ObdState> {
     if (err.contains('init elm327')) {
       return (
         message: 'Adapter tersambung, tetapi tidak menjawab perintah ELM327.',
-        help: '1. Cabut dongle selama 10 detik, lalu pasang kembali.\n'
-            '2. Pastikan perangkat yang dipilih adalah adapter OBD-II ELM327, '
+        help: '1. Cabut adapter selama 10 detik, lalu pasang kembali.\n'
+            '2. Pastikan perangkat yang dipilih adalah adapter OBD (ELM327), '
             'bukan perangkat Bluetooth lain.\n\n'
             'Detail teknis: $detail',
       );
@@ -1035,19 +1035,19 @@ class ObdService extends StateNotifier<ObdState> {
         err.contains('connection failed')) {
       return (
         message: '$deviceName tidak merespons.',
-        help: '1. Pastikan dongle terpasang dan kunci kontak ON '
-            '(lampu dongle menyala).\n'
-            '2. Tutup paksa aplikasi OBD lain (Torque, Car Scanner, dll). '
-            'Dongle hanya bisa dipakai satu aplikasi.\n'
-            '3. Cabut dongle selama 10 detik, lalu pasang kembali.\n'
-            '4. Jika masih gagal, lupakan perangkat di Pengaturan Bluetooth HP '
-            'lalu sandingkan ulang (PIN biasanya 1234 atau 0000).\n\n'
+        help: '1. Pastikan adapter terpasang dan kontak ON '
+            '(lampu adapter menyala).\n'
+            '2. Tutup paksa aplikasi OBD lain (Torque, Car Scanner, dll.). '
+            'Adapter hanya bisa dipakai satu aplikasi.\n'
+            '3. Cabut adapter selama 10 detik, lalu pasang kembali.\n'
+            '4. Jika masih gagal, lupakan perangkat di setelan Bluetooth HP, '
+            'lalu pasangkan ulang (PIN biasanya 1234 atau 0000).\n\n'
             'Detail teknis: $detail',
       );
     }
     return (
       message: 'Gagal terhubung ke $deviceName.',
-      help: 'Coba lagi beberapa saat. Jika terus gagal, cabut dongle 10 detik '
+      help: 'Coba lagi beberapa saat. Jika terus gagal, cabut adapter 10 detik, '
           'lalu pasang kembali.\n\n'
           'Detail teknis: $detail',
     );
@@ -1214,22 +1214,22 @@ class ObdService extends StateNotifier<ObdState> {
     }
 
     if (state.isSimulatorMode) {
-      onProgress?.call(0.15, 'Mendeteksi Protokol ECU (Mode Simulator)...');
+      onProgress?.call(0.15, 'Mendeteksi protokol mobil (mode simulator)…');
       await Future.delayed(const Duration(milliseconds: 350));
 
-      onProgress?.call(0.30, 'Membaca Identitas & VIN Kendaraan (Mode 09)...');
+      onProgress?.call(0.30, 'Membaca identitas dan VIN mobil (mode 09)…');
       await Future.delayed(const Duration(milliseconds: 350));
 
-      onProgress?.call(0.50, 'Memindai Dukungan Sensor & Parameter ECU (Mode 01)...');
+      onProgress?.call(0.50, 'Memeriksa sensor yang didukung (mode 01)…');
       await Future.delayed(const Duration(milliseconds: 350));
 
-      onProgress?.call(0.70, 'Membaca Kode Kerusakan Aktif (Mode 03)...');
+      onProgress?.call(0.70, 'Membaca kode kerusakan aktif (mode 03)…');
       await Future.delayed(const Duration(milliseconds: 350));
 
-      onProgress?.call(0.85, 'Membaca Kode Kerusakan Pending & Permanen (Mode 07/0A)...');
+      onProgress?.call(0.85, 'Membaca kode kerusakan tertunda dan permanen (mode 07/0A)…');
       await Future.delayed(const Duration(milliseconds: 350));
 
-      onProgress?.call(0.95, 'Memeriksa Kesiapan Emisi (I/M Readiness)...');
+      onProgress?.call(0.95, 'Memeriksa kesiapan uji emisi (I/M)…');
       await Future.delayed(const Duration(milliseconds: 300));
 
       final active = List<String>.from(state.telemetry.dtcs);
@@ -1286,7 +1286,7 @@ class ObdService extends StateNotifier<ObdState> {
 
     await _withPollingPaused(() async {
       // Step 1: Detect Protocol
-      onProgress?.call(0.15, 'Mendeteksi Protokol Komunikasi ECU...');
+      onProgress?.call(0.15, 'Mendeteksi protokol mobil…');
       try {
         final dpResp = await _sendAndAwaitResponse('AT DP\r', timeout: const Duration(seconds: 3));
         protocol = ObdParser.parseProtocol(dpResp);
@@ -1295,7 +1295,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 2: Read VIN & Vehicle Information (Mode 09 PID 02)
-      onProgress?.call(0.30, 'Membaca Identitas & VIN Kendaraan (Mode 09)...');
+      onProgress?.call(0.30, 'Membaca identitas dan VIN mobil (mode 09)…');
       try {
         final vinResp = await _sendAndAwaitResponse('0902\r', timeout: const Duration(seconds: 4));
         final parsedVin = ObdParser.parseVin(vinResp);
@@ -1308,7 +1308,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 2b: Odometer (Mode 01 PID A6) — not supported on all cars
-      onProgress?.call(0.40, 'Membaca Odometer ECU (PID 01A6)...');
+      onProgress?.call(0.40, 'Membaca odometer mobil (01A6)…');
       try {
         final odoResp = await _sendAndAwaitResponse('01A6\r', timeout: const Duration(seconds: 3));
         odometerKm = ObdParser.parseOdometer(odoResp);
@@ -1323,7 +1323,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 3: Scan Supported PIDs (Mode 01 PID 00, 20, 40)
-      onProgress?.call(0.50, 'Memindai Dukungan Sensor & Parameter ECU (Mode 01)...');
+      onProgress?.call(0.50, 'Memeriksa sensor yang didukung (mode 01)…');
       try {
         final pid00Resp = await _sendAndAwaitResponse('0100\r', timeout: const Duration(seconds: 3));
         supportedPids = ObdParser.parseSupportedPidsCount(pid00Resp);
@@ -1334,7 +1334,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 4: Active Fault Codes (Mode 03)
-      onProgress?.call(0.70, 'Membaca Kode Kerusakan Aktif / MIL (Mode 03)...');
+      onProgress?.call(0.70, 'Membaca kode kerusakan aktif (mode 03)…');
       try {
         final mode03Resp = await _sendAndAwaitResponse('03\r', timeout: const Duration(seconds: 4));
         final codes = _storedCodesFrom(mode03Resp, ecuAlive: ecuAnswered);
@@ -1347,7 +1347,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 5: Pending & Permanent Fault Codes (Mode 07 & Mode 0A)
-      onProgress?.call(0.85, 'Membaca Kode Kerusakan Pending & Permanen (Mode 07/0A)...');
+      onProgress?.call(0.85, 'Membaca kode kerusakan tertunda dan permanen (mode 07/0A)…');
       try {
         final mode07Resp = await _sendAndAwaitResponse('07\r', timeout: const Duration(seconds: 4));
         pendingDtcs = ObdParser.parsePendingDtc(mode07Resp);
@@ -1363,7 +1363,7 @@ class ObdService extends StateNotifier<ObdState> {
       }
 
       // Step 6: Emission Readiness (PID 0101)
-      onProgress?.call(0.95, 'Memeriksa Uji Kesiapan Emisi (I/M Readiness)...');
+      onProgress?.call(0.95, 'Memeriksa kesiapan uji emisi (I/M)…');
       try {
         final pid0101Resp = await _sendAndAwaitResponse('0101\r', timeout: const Duration(seconds: 4));
         readiness = ObdParser.parseImReadiness(pid0101Resp) ?? {};
@@ -1421,7 +1421,7 @@ class ObdService extends StateNotifier<ObdState> {
       return const EcuVehicleIdentityResult(
         success: false,
         message:
-            'Hubungkan OBD-II atau aktifkan Mode Simulator terlebih dahulu.',
+            'Hubungkan adapter OBD atau nyalakan mode simulator terlebih dahulu.',
       );
     }
 
@@ -1441,7 +1441,7 @@ class ObdService extends StateNotifier<ObdState> {
     if (state.status != ObdStatus.connected) {
       return const EcuVehicleIdentityResult(
         success: false,
-        message: 'Tunggu hingga OBD-II selesai terhubung, lalu coba lagi.',
+        message: 'Tunggu hingga adapter selesai terhubung, lalu coba lagi.',
       );
     }
 
@@ -1493,7 +1493,7 @@ class ObdService extends StateNotifier<ObdState> {
         if (hasVin) 'VIN dibaca',
         if (hasOdo) 'Odometer dibaca',
         if (!hasVin) 'VIN tidak tersedia',
-        if (!hasOdo) 'Odometer (01A6) tidak didukung ECU',
+        if (!hasOdo) 'Odometer tidak dilaporkan mobil',
       ].join(' · '),
     );
   }
@@ -1617,7 +1617,7 @@ class ObdService extends StateNotifier<ObdState> {
           DtcLogsCompanion.insert(
             timestamp: now,
             code: code,
-            description: 'Penghapusan via Scanner Diagnostik',
+            description: 'Dihapus lewat Diagnostik',
             category: code.startsWith('P') ? 'Powertrain' : (code.startsWith('C') ? 'Chassis' : 'Body/Network'),
             active: const Value(false),
             resolvedTime: Value(now),
@@ -1635,8 +1635,8 @@ class ObdService extends StateNotifier<ObdState> {
       status: ObdStatus.error,
       statusDetail: null,
       errorMessage: 'Koneksi ke adapter OBD terputus.',
-      errorHelp: 'Pastikan dongle masih terpasang dan kunci kontak ON. '
-          'Jika "Sambung otomatis" aktif, aplikasi akan mencoba menyambung '
+      errorHelp: 'Pastikan adapter masih terpasang dan kontak ON. '
+          'Jika Hubungkan otomatis aktif, aplikasi akan menghubungkan '
           'ulang sendiri.',
     );
     unawaited(stopBackgroundMonitoring());
