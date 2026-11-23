@@ -1272,7 +1272,7 @@ class ObdService extends StateNotifier<ObdState> {
 
     // REAL ELM327 BLUETOOTH ECU SCAN
     String protocol = 'ISO 15765-4 (CAN 11bit)';
-    String vin = 'Tidak Dilaporkan ECU';
+    String vin = 'Tidak dilaporkan mobil';
     int supportedPids = 0;
     List<String> activeDtcs = [];
     var activeDtcsRead = false;
@@ -1480,7 +1480,7 @@ class ObdService extends StateNotifier<ObdState> {
       return const EcuVehicleIdentityResult(
         success: false,
         message:
-            'ECU tidak mengembalikan VIN/odometer. Banyak mobil lama tidak mendukung PID ini — isi manual jika perlu.',
+            'Mobil tidak mengirim VIN/odometer. Banyak mobil lama tidak mendukungnya; isi manual bila perlu.',
       );
     }
 
