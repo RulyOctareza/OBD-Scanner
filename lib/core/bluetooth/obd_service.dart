@@ -1235,15 +1235,10 @@ class ObdService extends StateNotifier<ObdState> {
       final active = List<String>.from(state.telemetry.dtcs);
       final pending = <String>[];
       final permanent = <String>[];
+      // The demo VIN shows in the scan result only; it is never stored as
+      // the user's car (SettingsNotifier.applyEcuVehicleIdentity).
       const simVin = 'MHKM1502XK0198421';
       final simOdo = state.telemetry.odometer;
-
-      unawaited(
-        _ref.read(settingsProvider.notifier).applyEcuVehicleIdentity(
-              vin: simVin,
-              odometer: simOdo,
-            ),
-      );
 
       return DiagnosticScanResult(
         protocol: 'ISO 15765-4 (CAN 11/500 - Simulator)',

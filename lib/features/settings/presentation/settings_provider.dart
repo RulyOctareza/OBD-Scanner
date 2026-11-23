@@ -124,8 +124,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   )) {
     _initPrefs();
     
-    // Listen to OBD telemetry and update odometer dynamically from ECU if available
+    // Listen to OBD telemetry and update odometer dynamically from ECU if available.
+    // The simulator's odometer belongs to its demo car, not the user's.
     _ref.listen(obdServiceProvider, (previous, next) {
+      if (next.isSimulatorMode) return;
       final ecuOdo = next.telemetry.odometer;
       if (ecuOdo != null && ecuOdo > 0 && ecuOdo != state.currentOdometer) {
         updateOdometer(ecuOdo);
@@ -349,11 +351,15 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   }
 
   /// Applies identity fields discovered from ECU (VIN Mode 09 + odometer PID A6).
+  ///
+  /// Ignored in simulator mode: the demo car's VIN and odometer would
+  /// otherwise stay in the settings as the user's own car.
   Future<void> applyEcuVehicleIdentity({
     String? vin,
     double? odometer,
     bool overwriteName = true,
   }) async {
+    if (_ref.read(obdServiceProvider).isSimulatorMode) return;
     final db = _ref.read(databaseProvider);
 
     if (vin != null && VinDecoder.isValidVin(vin)) {
@@ -393,11 +399,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     await _ref.read(databaseProvider).setBoolPreference('is_simulator_mode', val);
     if (syncObd) {
       _ref.read(obdServiceProvider.notifier).applySimulatorMode(val);
-    }
-    if (val) {
-      // Simulator exposes a stable demo VIN + live odometer.
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      await syncVehicleIdentityFromEcu();
     }
   }
 

@@ -2,7 +2,8 @@
 // no oil target until the driver enters them, and every screen says so
 // instead of showing someone else's car. Also guards the Beranda listener:
 // healthProvider must not refresh while Beranda is offstage, because each
-// Riverpod refresh costs the whole screen a frame.
+// Riverpod refresh costs the whole screen a frame. The simulator's demo car
+// never becomes the user's car.
 import 'package:autocare/app.dart';
 import 'package:autocare/core/bluetooth/obd_service.dart';
 import 'package:autocare/core/database/database.dart';
@@ -205,5 +206,42 @@ void main() {
     await settle(tester);
     expect(find.text('Mesin terlalu panas'), findsOneWidget);
     await finish(tester);
+  });
+
+  testWidgets('the simulator never stores its demo car as the user\'s car',
+      (tester) async {
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+    final simDb = AppDatabase.withExecutor(NativeDatabase.memory());
+    final sim = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(simDb)],
+    );
+    sim.read(settingsProvider);
+    for (var i = 0; i < 50 && !sim.read(settingsProvider).isLoaded; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    }
+
+    // Not inside runAsync: the simulator's timers must run on the test clock.
+    sim.read(settingsProvider.notifier).setSimulatorMode(true);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester, 3000);
+    expect(sim.read(obdServiceProvider).telemetry.odometer, greaterThan(0),
+        reason: 'the simulator reports an odometer');
+    final scan = sim.read(obdServiceProvider.notifier).performFullDiagnosticScan();
+    await settle(tester, 3000);
+    expect((await scan).vin, isNotEmpty);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+
+    final s = sim.read(settingsProvider);
+    expect(s.vehicleName, defaultVehicleName);
+    expect(s.vehicleVin, isEmpty);
+    expect(s.hasOdometer, isFalse);
+
+    sim.read(settingsProvider.notifier).setSimulatorMode(false);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester, 4000);
+    sim.dispose();
+    await tester.runAsync(simDb.close);
+    await settle(tester, 500);
   });
 }
