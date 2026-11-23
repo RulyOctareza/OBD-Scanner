@@ -43,8 +43,8 @@ class ObdMetricConfig {
   static const List<ObdMetricConfig> all = [
     ObdMetricConfig(
       type: ObdMetricType.rpm,
-      label: 'Putaran Mesin',
-      unit: 'RPM',
+      label: 'Putaran mesin',
+      unit: 'rpm',
       minValue: 0,
       maxValue: 8000,
       warningThreshold: 6000,
@@ -53,7 +53,7 @@ class ObdMetricConfig {
     ObdMetricConfig(
       type: ObdMetricType.speed,
       label: 'Kecepatan',
-      unit: 'km/h',
+      unit: 'km/jam',
       minValue: 0,
       maxValue: 220,
       warningThreshold: 110,
@@ -61,7 +61,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.coolant,
-      label: 'Suhu Pendingin',
+      label: 'Suhu mesin',
       unit: '°C',
       minValue: 50,
       maxValue: 130,
@@ -70,7 +70,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.voltage,
-      label: 'Tegangan Aki',
+      label: 'Tegangan aki',
       unit: 'V',
       minValue: 9,
       maxValue: 16,
@@ -79,7 +79,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.throttle,
-      label: 'Bukaan Gas',
+      label: 'Bukaan gas',
       unit: '%',
       minValue: 0,
       maxValue: 100,
@@ -88,7 +88,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.engineLoad,
-      label: 'Beban Mesin',
+      label: 'Beban mesin',
       unit: '%',
       minValue: 0,
       maxValue: 100,
@@ -97,7 +97,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.map,
-      label: 'Tekanan Intake',
+      label: 'Tekanan intake',
       unit: 'kPa',
       minValue: 20,
       maxValue: 150,
@@ -106,7 +106,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.fuel,
-      label: 'Level BBM',
+      label: 'Sisa BBM',
       unit: '%',
       minValue: 0,
       maxValue: 100,
@@ -124,7 +124,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.intakeAirTemp,
-      label: 'Suhu Intake',
+      label: 'Suhu udara masuk',
       unit: '°C',
       minValue: -20,
       maxValue: 100,
@@ -133,7 +133,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.maf,
-      label: 'Aliran Udara',
+      label: 'Aliran udara',
       unit: 'g/s',
       minValue: 0,
       maxValue: 200,
@@ -142,7 +142,7 @@ class ObdMetricConfig {
     ),
     ObdMetricConfig(
       type: ObdMetricType.timingAdvance,
-      label: 'Timing Advance',
+      label: 'Waktu pengapian',
       unit: '°',
       minValue: -30,
       maxValue: 60,

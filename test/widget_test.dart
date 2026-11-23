@@ -25,9 +25,9 @@ void main() {
 
   test('Gauge metric labels are Indonesia-first', () {
     final labels = ObdMetricConfig.all.map((c) => c.label).toList();
-    expect(labels, contains('Putaran Mesin'));
+    expect(labels, contains('Putaran mesin'));
     expect(labels, contains('Kecepatan'));
-    expect(labels, contains('Suhu Pendingin'));
+    expect(labels, contains('Suhu mesin'));
     expect(labels, isNot(contains('TACHOMETER')));
     expect(labels, isNot(contains('SPEEDOMETER')));
   });
