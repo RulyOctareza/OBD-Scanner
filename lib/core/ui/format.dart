@@ -36,9 +36,14 @@ abstract final class Fmt {
     return value < 0 && !isZero ? '-$text' : text;
   }
 
-  /// Value and unit with a non-breaking space; `%` attaches directly.
-  static String unit(String value, String unit) =>
-      unit == '%' ? '$value%' : '$value$nbsp$unit';
+  /// Word joiner: keeps "km/jam" from breaking after its slash.
+  static const String _joiner = '\u2060';
+
+  /// Value and unit with a non-breaking space; `%` attaches directly. A unit
+  /// with a slash never wraps at it.
+  static String unit(String value, String unit) => unit == '%'
+      ? '$value%'
+      : '$value$nbsp${unit.replaceAll('/', '/$_joiner')}';
 
   static String km(num value, {int decimals = 0}) =>
       unit(number(value, decimals: decimals), 'km');

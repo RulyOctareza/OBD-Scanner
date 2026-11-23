@@ -28,12 +28,16 @@ void main() {
   group('units', () {
     test('join value and unit with a non-breaking space', () {
       expect(Fmt.km(161420), '161.420${nb}km');
-      expect(Fmt.kmPerLiter(14.2), '14,2${nb}km/L');
-      expect(Fmt.speed(52), '52${nb}km/jam');
+      expect(Fmt.kmPerLiter(14.2), '14,2${nb}km/\u2060L');
+      expect(Fmt.speed(52), '52${nb}km/\u2060jam');
       expect(Fmt.celsius(86), '86$nb°C');
       expect(Fmt.volts(13.9), '13,9${nb}V');
       expect(Fmt.liters(25.3), '25,3${nb}L');
       expect(Fmt.rpm(2063), '2.063${nb}rpm');
+    });
+
+    test('a unit with a slash never wraps at it', () {
+      expect(Fmt.speed(52).contains('/\u2060'), isTrue);
     });
 
     test('percent attaches directly', () {
