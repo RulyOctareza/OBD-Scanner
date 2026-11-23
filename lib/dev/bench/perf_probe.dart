@@ -30,6 +30,16 @@ class PerfProbe {
   void start() => SchedulerBinding.instance.addTimingsCallback(_frames.addAll);
 
   PerfWindow open(String name) => PerfWindow._(this, name);
+
+  /// The first reported frame whose vsync came at or after [micros].
+  FrameTiming? firstFrameAfter(int micros) {
+    for (final frame in _frames) {
+      if (frame.timestampInMicroseconds(FramePhase.vsyncStart) >= micros) {
+        return frame;
+      }
+    }
+    return null;
+  }
 }
 
 class PerfWindow {

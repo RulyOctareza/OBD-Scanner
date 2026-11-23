@@ -1,3 +1,4 @@
+import 'package:autocare/core/bluetooth/obd_service.dart';
 import 'package:autocare/core/database/database.dart';
 import 'package:autocare/core/database/database_provider.dart';
 import 'package:autocare/core/obd/obd_metric.dart';
@@ -7,6 +8,7 @@ import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 TelemetryPointBundle _sample(DateTime t, double rpm) => TelemetryPointBundle(
       timestamp: t,
@@ -37,6 +39,21 @@ Future<void> _seed(AppDatabase db, DateTime start, int count) async {
         ),
     ]);
   });
+}
+
+/// Counts SELECTs that read trip_points.
+class _TripPointReads extends QueryInterceptor {
+  int count = 0;
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(
+    QueryExecutor executor,
+    String statement,
+    List<Object?> args,
+  ) {
+    if (statement.contains('trip_points')) count++;
+    return super.runSelect(executor, statement, args);
+  }
 }
 
 void main() {
@@ -129,5 +146,52 @@ void main() {
       }
       expect(points.last.value, 1000.0 + 19999, reason: 'newest row kept');
     });
+  });
+
+  test('a closed chart leaves no provider, timer or query running', () async {
+    SharedPreferences.setMockInitialValues({});
+    final reads = _TripPointReads();
+    final db = AppDatabase.withExecutor(
+      NativeDatabase.memory().interceptWith(reads),
+    );
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(() async {
+      container.dispose();
+      await db.close();
+    });
+    await _seed(db, DateTime.now().subtract(const Duration(minutes: 3)), 30);
+
+    const key = (ObdMetricType.rpm, TelemetryTimeRange.fiveMin);
+    final open = container.listen(
+      telemetryHistoryProvider(ObdMetricType.rpm),
+      (_, __) {},
+    );
+    await container.read(storedSeriesProvider(key).future);
+    expect(container.exists(liveChartBufferProvider), isTrue);
+    expect(container.exists(obdServiceProvider), isTrue);
+    final readsWhileOpen = reads.count;
+    expect(readsWhileOpen, 1, reason: 'one query per chart opening and range');
+
+    // New points while the chart is open come through the live buffer:
+    // inserting must not re-run the stored query.
+    await _seed(db, DateTime.now().subtract(const Duration(minutes: 1)), 6);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(reads.count, readsWhileOpen);
+
+    open.close();
+    await Future<void>.delayed(Duration.zero);
+    expect(container.exists(telemetryHistoryProvider(ObdMetricType.rpm)), isFalse);
+    expect(container.exists(storedSeriesProvider(key)), isFalse);
+    expect(
+      container.exists(liveChartBufferProvider),
+      isFalse,
+      reason: 'the 1 Hz sampling timer is cancelled with the buffer',
+    );
+
+    await _seed(db, DateTime.now(), 6);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(reads.count, readsWhileOpen, reason: 'no query after close');
   });
 }

@@ -1,5 +1,6 @@
 // Dev-only benchmark entrypoint. Never imported by lib/main.dart, so none of
 // it is compiled into app builds. Build and run with tool/bench/run_bench.sh.
+import 'dart:developer' show Timeline;
 import 'dart:ffi' show Abi;
 import 'dart:io';
 
@@ -29,6 +30,7 @@ class _ReleaseLikeNoNetwork extends HttpOverrides {
 
 Future<void> main() async {
   final mainClock = Stopwatch()..start();
+  final mainStartMicros = Timeline.now;
   HttpOverrides.global = _ReleaseLikeNoNetwork();
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -75,6 +77,8 @@ Future<void> main() async {
     container: container,
     adapter: adapter,
     probe: probe,
+    mainStartMicros: mainStartMicros,
+    seedMs: seedClock.elapsedMilliseconds,
   );
   final startup = <String, Object>{
     'abi': Abi.current().toString(),

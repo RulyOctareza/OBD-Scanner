@@ -1,7 +1,9 @@
 // Dev-only benchmark scenarios (see lib/dev/bench/bench_main.dart).
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' show Timeline;
 import 'dart:io';
+import 'dart:ui' show FramePhase;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
@@ -30,7 +32,15 @@ class BenchRunner {
     required this.container,
     required this.adapter,
     required this.probe,
+    required this.mainStartMicros,
+    required this.seedMs,
   });
+
+  /// `Timeline.now` at the start of Dart main (engine frame-timing clock).
+  final int mainStartMicros;
+
+  /// Bench-only seeding time, taken out of startup figures.
+  final int seedMs;
 
   final ProviderContainer container;
   final FakeElm327Connector adapter;
@@ -48,7 +58,7 @@ class BenchRunner {
 
   Future<void> _run(Map<String, Object> startup) async {
     emit({'type': 'startup', ...startup});
-    await _waitFor('splash done', () => _path == '/health');
+    await _waitForHealthFrame();
     await Future<void>.delayed(_settle);
 
     unawaited(
@@ -153,6 +163,38 @@ class BenchRunner {
       Timer.periodic(const Duration(seconds: 30), (_) => report('tick'));
     } catch (e, stack) {
       debugPrint('${benchTag}_FAILED $e\n$stack');
+    }
+  }
+
+  /// What a user waits for after launch: Dart main to the raster finish of
+  /// the first Health frame, the splash's minimum display time included and
+  /// bench-only seeding excluded. Frame timings arrive in batches, so the
+  /// frame is found by its engine timestamps afterwards.
+  Future<void> _waitForHealthFrame() async {
+    final delegate = goRouter.routerDelegate;
+    if (_path != '/health') {
+      final reached = Completer<void>();
+      void check() {
+        if (_path == '/health' && !reached.isCompleted) reached.complete();
+      }
+
+      delegate.addListener(check);
+      try {
+        await reached.future.timeout(const Duration(seconds: 40));
+      } finally {
+        delegate.removeListener(check);
+      }
+    }
+    final reachedMicros = Timeline.now;
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    final frame = probe.firstFrameAfter(reachedMicros);
+    if (frame != null) {
+      final finish = frame.timestampInMicroseconds(FramePhase.rasterFinish);
+      emit({
+        'type': 'ready',
+        'health_interactive_ms':
+            ((finish - mainStartMicros) / 1000).round() - seedMs,
+      });
     }
   }
 

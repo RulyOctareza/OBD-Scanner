@@ -51,6 +51,13 @@ conditions() {
   adb shell dumpsys thermalservice 2>/dev/null | grep -iE 'status|temperature\{' | head -6
 }
 
+# CPU clusters (policy 0 and 4 on the Snapdragon 450) and GPU clocks once a
+# second, in logcat's time format, to compare clocks per scenario window
+# (tool/bench/summarize.dart). One shell loop on the phone, ended with it.
+freq_sampler() {
+  adb shell 'while true; do echo "$(date "+%m-%d %H:%M:%S") $(cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq 2>/dev/null || echo -)"; sleep 1; done'
+}
+
 # Foreground service and wake lock state of the bench process.
 fgs_check() {
   echo "== $1"
@@ -63,6 +70,8 @@ for i in $(seq 1 "$RUNS"); do
   sleep 5
   conditions > "$OUT/run$i-conditions.txt" || true
   adb logcat -c
+  freq_sampler > "$OUT/run$i-freq.txt" &
+  sampler=$!
   adb shell am start -W -n "$PKG/$ACTIVITY" > "$OUT/run$i-am-start.txt"
   started=$SECONDS
   deadline=$((SECONDS + 420))
@@ -84,6 +93,7 @@ for i in $(seq 1 "$RUNS"); do
   done
   adb exec-out run-as "$PKG" cat app_flutter/bench_results.jsonl > "$OUT/run$i.jsonl" ||
     adb logcat -d -s flutter | sed -n 's/.*AUTOCARE_BENCH //p' > "$OUT/run$i.jsonl"
+  kill "$sampler" 2> /dev/null || true
   fgs_check "after disconnect" >> "$OUT/run$i-fgs.txt"
   adb logcat -d > "$OUT/run$i-logcat.txt"
   grep "Displayed $PKG" "$OUT/run$i-logcat.txt" > "$OUT/run$i-displayed.txt" || true
