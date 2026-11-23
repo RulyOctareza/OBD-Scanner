@@ -124,11 +124,7 @@ class MetricTile extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                 ],
                 Expanded(
-                  child: Text(
-                    label,
-                    style: theme.textTheme.bodyMedium,
-                    maxLines: 2,
-                  ),
+                  child: Text(label, style: theme.textTheme.bodyMedium),
                 ),
                 if (onTap != null)
                   Icon(

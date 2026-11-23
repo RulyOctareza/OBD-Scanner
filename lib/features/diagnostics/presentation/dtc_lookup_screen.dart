@@ -77,7 +77,8 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
               onChanged: (_) => _update(),
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: 'Cari kode atau gejala, mis. P0300',
+                hintText: 'Cari kode atau gejala',
+                hintMaxLines: 2,
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: _search.text.isEmpty
                     ? null

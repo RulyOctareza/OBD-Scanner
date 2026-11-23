@@ -39,6 +39,21 @@ class SegmentSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sits in the app bar: labels grow with the text size up to 1.3x, then
+    // the control shrinks to fit rather than overflow the bar.
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(maxScaleFactor: 1.3),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: _switch(context),
+      ),
+    );
+  }
+
+  Widget _switch(BuildContext context) {
     return SegmentedButton<String>(
       segments: [
         for (final s in segments)

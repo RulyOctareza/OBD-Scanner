@@ -129,8 +129,9 @@ class HealthScreen extends ConsumerWidget {
     int tripId,
   ) async {
     final db = ref.read(databaseProvider);
-    final trip = await (db.select(db.trips)..where((t) => t.id.equals(tripId)))
-        .getSingleOrNull();
+    final trip = await (db.select(
+      db.trips,
+    )..where((t) => t.id.equals(tripId))).getSingleOrNull();
     if (trip == null) return;
     ref.read(tripRecorderProvider.notifier).clearLastCompletedTrip();
     if (!context.mounted) return;
@@ -167,7 +168,8 @@ class _HealthSummaryCard extends StatelessWidget {
         : '${report.score} dari 100';
     return Semantics(
       container: true,
-      label: 'Skor kesehatan $scoreText. ${report.statusTitle}. '
+      label:
+          'Skor kesehatan $scoreText. ${report.statusTitle}. '
           '${report.statusDescription}',
       excludeSemantics: true,
       child: AppCard(
@@ -206,18 +208,23 @@ class _ScoreRing extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final color = AppStatusColors.of(context).foreground(level);
     final target = (score ?? 0) / 100;
+    // The ring grows a little with the text size; its number and label scale
+    // down to stay inside it.
+    final size =
+        _size *
+        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4).toDouble();
     // Counts up once when the score changes; nothing animates afterwards.
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: target),
       duration: const Duration(milliseconds: 600),
       curve: Curves.easeOutCubic,
       builder: (context, value, _) => SizedBox.square(
-        dimension: _size,
+        dimension: size,
         child: Stack(
           alignment: Alignment.center,
           children: [
             SizedBox.square(
-              dimension: _size,
+              dimension: size,
               child: CircularProgressIndicator(
                 value: value,
                 strokeWidth: 8,
@@ -226,19 +233,25 @@ class _ScoreRing extends StatelessWidget {
                 backgroundColor: scheme.surfaceContainerHighest,
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  score == null ? Fmt.pending : '${(value * 100).round()}',
-                  style: AppTheme.numberStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurface,
-                  ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      score == null ? Fmt.pending : '${(value * 100).round()}',
+                      style: AppTheme.numberStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                    Text('Skor', style: Theme.of(context).textTheme.labelSmall),
+                  ],
                 ),
-                Text('Skor', style: Theme.of(context).textTheme.labelSmall),
-              ],
+              ),
             ),
           ],
         ),
@@ -357,8 +370,11 @@ class _LiveTripRecordingCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.fiber_manual_record_rounded,
-                    size: 14, color: status.kritis),
+                Icon(
+                  Icons.fiber_manual_record_rounded,
+                  size: 14,
+                  color: status.kritis,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text('Merekam perjalanan', style: text.titleSmall),
@@ -434,15 +450,18 @@ class _LastTripSection extends ConsumerWidget {
                 compact: true,
                 icon: Icons.directions_car_outlined,
                 title: 'Belum ada perjalanan',
-                message: 'Perjalanan terekam otomatis saat mobil berjalan '
+                message:
+                    'Perjalanan terekam otomatis saat mobil berjalan '
                     'dengan adapter terhubung.',
               ),
             )
           : _LastTripCard(trip: list.first),
       loading: () => const SizedBox(height: 120),
       error: (e, _) => AppCard(
-        child: Text('Perjalanan gagal dimuat.',
-            style: Theme.of(context).textTheme.bodyMedium),
+        child: Text(
+          'Perjalanan gagal dimuat.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
       ),
     );
   }
@@ -468,7 +487,10 @@ class _LastTripCard extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: Text(Fmt.relative(trip.startTime), style: text.bodyMedium),
+                child: Text(
+                  Fmt.relative(trip.startTime),
+                  style: text.bodyMedium,
+                ),
               ),
               StatusChip(
                 tripScoreLevel(trip.tripHealthScore),
@@ -509,8 +531,8 @@ class _LastTripCard extends ConsumerWidget {
 StatusLevel tripScoreLevel(int score) => score >= 95
     ? StatusLevel.ok
     : score >= 80
-        ? StatusLevel.waspada
-        : StatusLevel.kritis;
+    ? StatusLevel.waspada
+    : StatusLevel.kritis;
 
 class _TripStatsGrid extends StatelessWidget {
   const _TripStatsGrid({required this.trip});

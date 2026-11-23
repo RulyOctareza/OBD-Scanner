@@ -19,12 +19,12 @@ typedef ConnectionView = ({
 });
 
 ConnectionView connectionViewOf(ObdState s) => (
-      status: s.status,
-      isSimulator: s.isSimulatorMode,
-      deviceName: s.connectedDeviceName,
-      errorMessage: s.errorMessage,
-      statusDetail: s.statusDetail,
-    );
+  status: s.status,
+  isSimulator: s.isSimulatorMode,
+  deviceName: s.connectedDeviceName,
+  errorMessage: s.errorMessage,
+  statusDetail: s.statusDetail,
+);
 
 /// The one connection status of the app, used by every screen that needs a
 /// link. Tapping it opens the connection sheet.
@@ -59,7 +59,8 @@ class ConnectionStatusCard extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final status = AppStatusColors.of(context);
-    final busy = view.status == ObdStatus.connecting ||
+    final busy =
+        view.status == ObdStatus.connecting ||
         view.status == ObdStatus.initializing;
 
     late final IconData icon;
@@ -93,7 +94,10 @@ class ConnectionStatusCard extends StatelessWidget {
       iconBackground = status.kritisContainer;
       title = 'Gagal terhubung';
       subtitle = view.errorMessage ?? 'Periksa adapter, lalu coba lagi.';
-      action = FilledButton.tonal(onPressed: onTap, child: const Text('Coba lagi'));
+      action = FilledButton.tonal(
+        onPressed: onTap,
+        child: const Text('Coba lagi'),
+      );
     } else {
       icon = Icons.bluetooth_disabled_rounded;
       iconColor = scheme.onSurfaceVariant;
@@ -103,36 +107,68 @@ class ConnectionStatusCard extends StatelessWidget {
       action = FilledButton(onPressed: onTap, child: const Text('Hubungkan'));
     }
 
+    final summary = Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: iconBackground,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 22, color: iconColor),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 2),
+              Text(subtitle, style: theme.textTheme.bodyMedium),
+            ],
+          ),
+        ),
+        if (action == null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+        ],
+      ],
+    );
+
     return AppCard(
       onTap: onTap,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.md,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: iconBackground, shape: BoxShape.circle),
-            child: Icon(icon, size: 22, color: iconColor),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: theme.textTheme.titleSmall),
-                const SizedBox(height: 2),
-                Text(subtitle, style: theme.textTheme.bodyMedium),
-              ],
+      // The button sits beside the text when there is room, and under it on
+      // a narrow screen or with large text.
+      child: action == null
+          ? summary
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final scale = MediaQuery.textScalerOf(context).scale(1);
+                final roomy = constraints.maxWidth >= 300 * scale;
+                if (roomy) {
+                  return Row(
+                    children: [
+                      Expanded(child: summary),
+                      const SizedBox(width: AppSpacing.sm),
+                      action!,
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    summary,
+                    const SizedBox(height: AppSpacing.md),
+                    action!,
+                  ],
+                );
+              },
             ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          action ??
-              Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
-        ],
-      ),
     );
   }
 }
