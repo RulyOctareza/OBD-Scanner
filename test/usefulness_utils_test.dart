@@ -20,11 +20,11 @@ void main() {
         ),
       );
 
-      expect(report, contains('Laporan Diagnostik AutoCare'));
+      expect(report, contains('Laporan diagnostik AutoCare'));
       expect(report, contains('P0300'));
       expect(report, contains('P0171'));
       expect(report, contains('VIN: TESTVIN123'));
-      expect(report, contains('MIL: ON'));
+      expect(report, contains('Lampu Check Engine: Menyala'));
     });
   });
 }

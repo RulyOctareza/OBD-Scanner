@@ -1,22 +1,29 @@
 import '../bluetooth/obd_service.dart';
+import '../ui/format.dart';
+import '../../features/diagnostics/presentation/dtc_display.dart';
 
-/// Formats a diagnostic scan result for clipboard / share text.
+/// The diagnostic scan as plain text for the clipboard, in the app's words,
+/// to send to a workshop.
 String formatDtcReport(DiagnosticScanResult result) {
   final buffer = StringBuffer();
-  buffer.writeln('Laporan Diagnostik AutoCare');
-  buffer.writeln('Waktu: ${result.scanTimestamp.toIso8601String()}');
-  buffer.writeln('Protokol: ${result.protocol}');
-  if (result.vin.isNotEmpty) {
-    buffer.writeln('VIN: ${result.vin}');
+  buffer.writeln('Laporan diagnostik AutoCare');
+  buffer.writeln('Waktu: ${Fmt.dateTime(result.scanTimestamp)}');
+  if (result.protocol.isNotEmpty) buffer.writeln('Protokol: ${result.protocol}');
+  if (result.vin.isNotEmpty) buffer.writeln('VIN: ${result.vin}');
+  if (result.odometerKm != null) {
+    buffer.writeln('Odometer: ${Fmt.km(result.odometerKm!)}');
   }
-  buffer.writeln('MIL: ${result.milStatus ? "ON" : "OFF"}');
-  buffer.writeln('Jumlah DTC: ${result.dtcCount}');
+  buffer.writeln(
+    'Lampu Check Engine: ${result.milStatus ? 'Menyala' : 'Mati'}',
+  );
   buffer.writeln();
 
-  void writeList(String title, List<String> codes) {
+  void writeList(String title, List<String> codes, {bool read = true}) {
     buffer.writeln(title);
-    if (codes.isEmpty) {
-      buffer.writeln('- (tidak ada)');
+    if (!read) {
+      buffer.writeln('- belum terbaca (mobil tidak menjawab)');
+    } else if (codes.isEmpty) {
+      buffer.writeln('- tidak ada');
     } else {
       for (final code in codes) {
         buffer.writeln('- $code');
@@ -25,15 +32,20 @@ String formatDtcReport(DiagnosticScanResult result) {
     buffer.writeln();
   }
 
-  writeList('DTC Aktif:', result.activeDtcs);
-  writeList('DTC Pending:', result.pendingDtcs);
-  writeList('DTC Permanen:', result.permanentDtcs);
+  writeList('Kode aktif:', result.activeDtcs, read: result.activeDtcsRead);
+  writeList('Kode tertunda:', result.pendingDtcs);
+  writeList('Kode permanen:', result.permanentDtcs);
 
-  if (result.imReadiness.isNotEmpty) {
-    buffer.writeln('I/M Readiness:');
-    result.imReadiness.forEach((key, ready) {
-      buffer.writeln('- $key: ${ready ? "Siap" : "Belum"}');
-    });
+  final monitors = [
+    for (final entry in readinessLabels.entries)
+      if (result.imReadiness.containsKey(entry.key))
+        '- ${entry.value}: ${result.imReadiness[entry.key]! ? 'Siap' : 'Belum siap'}',
+  ];
+  buffer.writeln('Kesiapan uji emisi (I/M):');
+  if (monitors.isEmpty) {
+    buffer.writeln('- tidak tersedia');
+  } else {
+    monitors.forEach(buffer.writeln);
   }
 
   return buffer.toString().trim();

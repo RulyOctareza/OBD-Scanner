@@ -5,6 +5,11 @@ import 'tokens.dart';
 /// Opens a bottom sheet on the root navigator, so it covers the navigation
 /// bar instead of sliding under it (a sheet opened on a tab's own navigator
 /// stays inside the tab).
+///
+/// Every sheet's bottom inset is handled here, once: the modal route's safe
+/// area leaves the bottom open so the sheet colour reaches the screen edge,
+/// and the content is lifted above the system navigation bar, or above the
+/// keyboard when it is taller.
 Future<T?> showAppSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -16,7 +21,16 @@ Future<T?> showAppSheet<T>({
     isScrollControlled: true,
     useSafeArea: true,
     isDismissible: isDismissible,
-    builder: builder,
+    builder: (sheetContext) {
+      final media = MediaQuery.of(sheetContext);
+      final bottom = media.viewInsets.bottom > media.viewPadding.bottom
+          ? media.viewInsets.bottom
+          : media.viewPadding.bottom;
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: builder(sheetContext),
+      );
+    },
   );
 }
 
@@ -41,10 +55,9 @@ class AppSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: keyboard),
-      child: Column(
+    // Insets come from showAppSheet; the body scrolls when the content is
+    // taller than the room the sheet gets.
+    return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -95,7 +108,6 @@ class AppSheet extends StatelessWidget {
           else
             const SizedBox(height: AppSpacing.lg),
         ],
-      ),
     );
   }
 }
@@ -116,6 +128,7 @@ Future<bool> showConfirmDialog(
     builder: (dialogContext) {
       final scheme = Theme.of(dialogContext).colorScheme;
       return AlertDialog(
+        scrollable: true,
         title: Text(title),
         content: Text(message),
         actions: [
@@ -138,4 +151,28 @@ Future<bool> showConfirmDialog(
     },
   );
   return confirmed ?? false;
+}
+
+/// Tells something that needs no decision, with one button to close.
+Future<void> showInfoDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+  String closeLabel = 'Tutup',
+}) {
+  return showDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    builder: (dialogContext) => AlertDialog(
+      scrollable: true,
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: Text(closeLabel),
+        ),
+      ],
+    ),
+  );
 }

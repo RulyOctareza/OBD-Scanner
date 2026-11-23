@@ -291,6 +291,11 @@ class DtcRepository {
     ),
   };
 
+  /// True when the dictionary has its own entry for [code]; other codes get
+  /// a generic description from [getCodeInfo].
+  static bool isKnown(String code) =>
+      _dtcDatabase.containsKey(code.trim().toUpperCase());
+
   static DtcCode getCodeInfo(String code) {
     final cleanCode = code.trim().toUpperCase();
     if (_dtcDatabase.containsKey(cleanCode)) {

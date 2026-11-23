@@ -48,9 +48,13 @@ class TelemetryChartModal extends ConsumerWidget {
     );
     final technical = MetricDisplay.technicalName(metricType);
 
-    return SizedBox(
-      height: MediaQuery.sizeOf(context).height * 0.8,
+    final chartHeight =
+        (MediaQuery.sizeOf(context).height * 0.32).clamp(180.0, 320.0);
+    // Scrolls as a whole: at large text sizes or on a short screen the
+    // statistics stay reachable instead of ending under the screen edge.
+    return SingleChildScrollView(
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
@@ -112,11 +116,14 @@ class TelemetryChartModal extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Expanded(
-            child: historyAsync.when(
+          historyAsync.when(
               // Stored trip points still loading and no live samples yet.
-              loading: () => Center(
-                child: Text('Memuat data grafik…', style: theme.textTheme.bodyMedium),
+              loading: () => SizedBox(
+                height: chartHeight,
+                child: Center(
+                  child: Text('Memuat data grafik…',
+                      style: theme.textTheme.bodyMedium),
+                ),
               ),
               error: (e, _) => EmptyState(
                 compact: true,
@@ -126,7 +133,8 @@ class TelemetryChartModal extends ConsumerWidget {
               ),
               data: (data) {
                 if (data.points.isEmpty) {
-                  return SingleChildScrollView(
+                  return SizedBox(
+                    height: chartHeight,
                     child: EmptyState(
                       compact: true,
                       icon: Icons.show_chart_rounded,
@@ -140,6 +148,7 @@ class TelemetryChartModal extends ConsumerWidget {
                   );
                 }
                 return Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (data.isStable)
@@ -155,7 +164,8 @@ class TelemetryChartModal extends ConsumerWidget {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
-                    Expanded(
+                    SizedBox(
+                      height: chartHeight,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(
                           AppSpacing.md,
@@ -184,7 +194,6 @@ class TelemetryChartModal extends ConsumerWidget {
                   ],
                 );
               },
-            ),
           ),
         ],
       ),
@@ -271,12 +280,15 @@ class _Chart extends StatelessWidget {
               reservedSize: 28,
               interval: (spots.last.x / 2).clamp(1.0, double.infinity),
               getTitlesWidget: (value, meta) {
-                // The last label would be centred on the right edge and cut.
-                if (value < 0 || value == meta.max) return const SizedBox.shrink();
+                if (value < 0) return const SizedBox.shrink();
                 final time =
                     firstTime.add(Duration(milliseconds: (value * 1000).toInt()));
-                return Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                // fitInside keeps the first and last label within the chart
+                // instead of centring them on (and past) its edges.
+                return SideTitleWidget(
+                  axisSide: meta.axisSide,
+                  space: AppSpacing.sm,
+                  fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
                   child: Text(_timeLabel(time, span), style: text),
                 );
               },
