@@ -57,7 +57,7 @@ flowchart TD
 | Tab | Isi |
 |---|---|
 | **Beranda** | Status koneksi, skor kesehatan mobil, hal yang perlu perhatian beserta tombol aksinya, pemeriksaan sistem, ringkasan perjalanan terakhir |
-| **Live** | Segmen **Meter** (dua gauge besar, empat indikator kecil yang bisa dipilih, indikator ECO, Trip A/B, layar penuh) dan **Sensor** (semua sensor; ketuk untuk grafik riwayatnya) |
+| **Live** | Segmen **Meter** (dua gauge besar, empat indikator kecil yang bisa diatur, petunjuk Hemat, Trip A/B, layar penuh) dan **Sensor** (semua sensor; ketuk untuk grafik riwayatnya) |
 | **Diagnostik** | Segmen **Pindai** (kode kerusakan, lampu Check Engine, kesiapan uji emisi) dan **Kamus kode** |
 | **Riwayat** | Perjalanan, isi BBM, dan servis dalam satu urutan waktu, dengan filter dan ringkasan |
 | **Pengaturan** | Bagian Mobil (nama, VIN, odometer, target ganti oli), Koneksi (adapter, hubungkan otomatis), Simulator (mode simulator dan saklar simulasinya), dan Tentang |
@@ -236,12 +236,12 @@ stateDiagram-v2
 
 - Jarak dihitung dari kecepatan OBD terhadap waktu nyata (bukan GPS). Jeda ≥ 10 detik (misalnya saat koneksi ulang) tidak dihitung sebagai jarak.
 - Saat disimpan: waktu selesai, jarak, kecepatan rata-rata, suhu dan RPM maksimum, durasi, menit idle, konsumsi km/L, dan skor kesehatan perjalanan (−15 bila suhu pernah > 105 °C, −20 lagi bila > 115 °C). Jarak perjalanan ditambahkan ke odometer.
-- **Trip A** berjalan sampai direset. **Trip B** adalah meter harian yang kembali ke 0 setiap hari baru. Keduanya bisa direset dengan menekan lama di Live → Meter.
+- **Trip A** berjalan sampai direset. **Trip B** adalah meter harian yang kembali ke 0 setiap hari baru. Keduanya bisa direset lewat menu di Live → Meter (Reset Trip A / Reset Trip B), dengan konfirmasi.
 - Tidak ada perjalanan yang dicatat dalam mode simulator, supaya data contoh tidak bercampur dengan riwayat asli.
 
 ## 8. Grafik dan metrik turunan
 
-**Grafik riwayat** menggabungkan titik data perjalanan yang tersimpan dengan buffer live 1 Hz di memori (maksimal sekitar 1 jam). Buffer hanya mengambil sampel selama ada grafik yang terbuka. Rentang yang tersedia adalah 1m, 5m, 15m, 1h, dan Semua. Nilai yang berarti "belum ada data" dibuang, titik yang terlalu rapat digabung, lalu jumlah titik dikurangi sampai maksimal 200.
+**Grafik riwayat** menggabungkan titik data perjalanan yang tersimpan dengan buffer live 1 Hz di memori (maksimal sekitar 1 jam). Buffer hanya mengambil sampel selama ada grafik yang terbuka. Rentang yang tersedia adalah 1 mnt, 5 mnt, 15 mnt, 1 jam, dan Semua. Nilai yang berarti "belum ada data" dibuang, titik yang terlalu rapat digabung, lalu jumlah titik dikurangi sampai maksimal 200.
 
 **Konsumsi BBM (km/L)** tidak tersedia sebagai PID, jadi diperkirakan dari aliran bahan bakar:
 
@@ -249,7 +249,7 @@ stateDiagram-v2
 2. Hanya MAP: massa udara dihitung dengan hukum gas ideal dari MAP, RPM, dan suhu intake, dengan asumsi mesin **1,2 L** dan efisiensi volumetrik 80 % (disetel untuk mobil acuan, Toyota Agya).
 3. Tidak ada keduanya: perkiraan kasar dari RPM dan beban mesin.
 
-Hasilnya 0 saat mesin mati atau kecepatan < 2 km/jam, dan dibatasi maksimal 50 km/L. Badge **ECO** menyala saat kecepatan > 10 km/jam, RPM 1200–2000, bukaan gas < 25 %, dan beban < 40 %.
+Hasilnya 0 saat mesin mati atau kecepatan < 2 km/jam, dan dibatasi maksimal 50 km/L. Petunjuk **Hemat** di Meter menyala saat kecepatan > 10 km/jam, putaran mesin 1200–2000 rpm, bukaan gas < 25 %, dan beban mesin < 40 %.
 
 ## 9. Penyimpanan data
 

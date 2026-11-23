@@ -14,7 +14,7 @@ PINDAI KODE KERUSAKAN DAN KAMUS KODE
 DATA LIVE: METER DAN SENSOR
 • Meter dengan gauge yang bisa Anda atur, plus mode layar penuh.
 • Sensor real-time: putaran mesin, kecepatan, suhu mesin, tegangan aki, tekanan intake (MAP), aliran udara (MAF), suhu udara masuk, bukaan gas, beban mesin, waktu pengapian, dan sisa BBM.
-• Perkiraan konsumsi BBM (km/L) dan indikator ECO saat berkendara hemat.
+• Perkiraan konsumsi BBM (km/L) dan petunjuk Hemat saat berkendara efisien.
 • Grafik riwayat untuk setiap sensor, dari 1 menit sampai 1 jam.
 
 RIWAYAT PERJALANAN, ISI BBM, DAN SERVIS

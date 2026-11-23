@@ -55,7 +55,7 @@
 | ❤️ | **Skor kesehatan mobil** | Skor 0–100 dari suhu mesin, aki dan alternator, putaran idle, kode kerusakan aktif, dan jadwal ganti oli. Status normal, waspada, atau kritis, lengkap dengan langkah berikutnya dan tombol menuju layar yang tepat. |
 | 🛠️ | **Pindai kode kerusakan** | Baca kode kerusakan (DTC) aktif, tertunda, dan permanen, status lampu Check Engine, dan kesiapan uji emisi (I/M). Hapus kode kerusakan dan salin laporan pemindaian untuk bengkel. |
 | 📖 | **Kamus kode** | Arti kode kerusakan dalam Bahasa Indonesia: gejala, kemungkinan penyebab, dan rekomendasi tindakan, dengan pencarian dan filter kategori. |
-| ⏱️ | **Data live: Meter** | Dua gauge besar dan empat indikator kecil yang bisa dipilih, indikator ECO, Trip A dan Trip B harian, plus mode layar penuh. |
+| ⏱️ | **Data live: Meter** | Dua gauge besar dan empat indikator kecil yang bisa diatur, petunjuk Hemat saat berkendara efisien, Trip A dan Trip B harian, plus mode layar penuh. |
 | 📊 | **Data live: Sensor** | Putaran mesin, kecepatan, suhu mesin dan udara masuk, tegangan aki, MAP, MAF, bukaan gas, beban mesin, waktu pengapian, sisa BBM, perkiraan konsumsi BBM, dan grafik riwayat 1 menit sampai 1 jam. |
 | 🧾 | **Riwayat perjalanan, isi BBM, dan servis** | Perjalanan tercatat otomatis (jarak, durasi, kecepatan rata-rata, suhu mesin tertinggi, km/L). Catat isi BBM dengan km/L metode isi penuh dan riwayat servis, semuanya dengan filter tanggal dan jenis. |
 | 🔌 | **Menghubungkan tanpa ribet** | Cari dan pasangkan adapter dari dalam aplikasi (PIN 1234 otomatis), terhubung otomatis ke adapter terakhir, dan langkah perbaikan bila gagal. |

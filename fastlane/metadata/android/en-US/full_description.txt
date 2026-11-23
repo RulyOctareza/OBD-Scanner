@@ -14,7 +14,7 @@ SCAN TROUBLE CODES, WITH A CODE DICTIONARY
 LIVE DATA: GAUGES AND SENSORS
 • Gauges you can customise, plus a full-screen mode.
 • Real-time sensors: engine speed, vehicle speed, engine temperature, battery voltage, intake pressure (MAP), air flow (MAF), intake air temperature, throttle position, engine load, ignition timing, and fuel remaining.
-• Estimated fuel economy (km/L) and an ECO indicator when you drive efficiently.
+• Estimated fuel economy (km/L) and an economy hint when you drive efficiently.
 • A history chart for every sensor, from 1 minute up to 1 hour.
 
 HISTORY: TRIPS, FUEL, AND SERVICE

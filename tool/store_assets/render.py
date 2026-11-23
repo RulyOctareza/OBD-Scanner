@@ -53,9 +53,9 @@ SHOTS = [
     {
         "name": "02-meter",
         "id": ("Meter kokpit yang bisa kamu atur",
-               "RPM, kecepatan, Trip A dan B, plus indikator ECO."),
+               "Putaran mesin, kecepatan, Trip A dan B, plus petunjuk Hemat."),
         "en": ("A cockpit you can customise",
-               "RPM, speed, Trip A and B, plus an ECO indicator."),
+               "Engine speed, vehicle speed, Trip A and B, plus an economy hint."),
     },
     {
         "name": "03-sensor",
