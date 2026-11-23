@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../data/dtc_repository.dart';
 import '../domain/dtc_model.dart';
+import '../../../core/ui/segment_switch.dart';
 
 class DtcLookupScreen extends StatefulWidget {
   const DtcLookupScreen({super.key});
@@ -48,11 +49,10 @@ class _DtcLookupScreenState extends State<DtcLookupScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Kamus Kode Kerusakan (DTC)',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: const SegmentSwitch(
+          segments: diagnosticSegments,
+          current: '/dtc_lookup',
         ),
-        centerTitle: true,
       ),
       body: SafeArea(
         child: Column(

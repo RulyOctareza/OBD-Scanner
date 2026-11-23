@@ -61,7 +61,7 @@ void main() {
       );
 
       expect(report.score, 100);
-      expect(report.statusTitle, contains('PRIMA'));
+      expect(report.statusTitle, 'Agya dalam kondisi baik');
       expect(report.warnings, isEmpty);
     });
 
@@ -82,7 +82,8 @@ void main() {
       final report = HealthEngine.calculate(telemetry);
 
       expect(report.score, 85); // 100 - 15 = 85
-      expect(report.warnings, contains(contains('Suhu mesin di atas batas normal')));
+      expect(report.warnings.single.kind, HealthWarningKind.coolant);
+      expect(report.warnings.single.title, 'Suhu mesin tinggi');
     });
 
     test('Severe health drop with check engine DTC', () {
@@ -102,7 +103,8 @@ void main() {
       final report = HealthEngine.calculate(telemetry);
 
       expect(report.score, 80); // 100 - 20 = 80
-      expect(report.warnings, contains(contains('Trouble Code [P0138]')));
+      expect(report.warnings.single.kind, HealthWarningKind.dtc);
+      expect(report.warnings.single.detail, contains('P0138'));
     });
   });
 }

@@ -9,6 +9,7 @@ import '../../../core/widgets/obd_connection_sheet.dart';
 import '../../../core/utils/usefulness_utils.dart';
 import '../data/dtc_repository.dart';
 import '../domain/dtc_model.dart';
+import '../../../core/ui/segment_switch.dart';
 
 class DiagnosticScannerScreen extends ConsumerStatefulWidget {
   const DiagnosticScannerScreen({super.key});
@@ -263,18 +264,10 @@ class _DiagnosticScannerScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Scanner Diagnostik ECU',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        title: const SegmentSwitch(
+          segments: diagnosticSegments,
+          current: '/diagnostics',
         ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Kamus Kode DTC',
-            icon: const Icon(Icons.menu_book_rounded, color: AppColors.primary),
-            onPressed: () => context.push('/dtc_lookup'),
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -605,7 +598,7 @@ class _DiagnosticScannerScreenState
                 )
               else
                 OutlinedButton.icon(
-                  onPressed: () => context.push('/dtc_lookup'),
+                  onPressed: () => context.go('/dtc_lookup'),
                   icon: const Icon(Icons.search, size: 18),
                   label: const Text('Buka Kamus Kode DTC'),
                 ),

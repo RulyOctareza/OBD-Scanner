@@ -16,11 +16,15 @@ final healthProvider = Provider<HealthReport>((ref) {
   final vehicleName = ref.watch(
     settingsProvider.select((s) => s.vehicleName),
   );
+  final dtcsChecked = ref.watch(
+    obdServiceProvider.select((s) => s.dtcsChecked),
+  );
 
   return HealthEngine.calculate(
     telemetry,
     nextOilOdometer: nextOilOdometer,
     currentOdometer: currentOdometer,
     vehicleName: vehicleName,
+    dtcsChecked: dtcsChecked,
   );
 });

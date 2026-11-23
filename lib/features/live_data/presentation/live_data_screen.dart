@@ -8,6 +8,7 @@ import '../../../core/widgets/live_obd.dart';
 import '../../../core/widgets/obd_connection_sheet.dart';
 import 'widgets/gauge_widget.dart';
 import 'widgets/telemetry_chart_modal.dart';
+import '../../../core/ui/segment_switch.dart';
 
 /// One Sensor card: what it shows and how its value text and colour follow
 /// the telemetry.
@@ -159,13 +160,10 @@ class LiveDataScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Semua Sensor',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+        title: const SegmentSwitch(
+          segments: liveSegments,
+          current: '/live_data',
         ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
       ),
       body: SafeArea(
         child: status != ObdStatus.connected && status != ObdStatus.initializing

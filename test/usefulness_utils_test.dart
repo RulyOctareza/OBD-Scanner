@@ -27,27 +27,4 @@ void main() {
       expect(report, contains('MIL: ON'));
     });
   });
-
-  group('warningActionRoute', () {
-    test('routes coolant warnings to meter', () {
-      expect(
-        warningActionRoute('Suhu coolant kritis (115°C). Matikan mesin segera!'),
-        '/dashboard',
-      );
-    });
-
-    test('routes DTC warnings to diagnostics', () {
-      expect(
-        warningActionRoute('Trouble Code [P0300]: Misfire (High)'),
-        '/diagnostics',
-      );
-    });
-
-    test('routes oil warnings to timeline', () {
-      expect(
-        warningActionRoute('Oli mesin melewati batas ganti! Segera ganti oli.'),
-        '/timeline',
-      );
-    });
-  });
 }

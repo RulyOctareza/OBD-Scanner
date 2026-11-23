@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:autocare/core/theme/app_theme.dart';
+import 'package:autocare/core/ui/status.dart';
 import 'package:autocare/features/health/domain/health_engine.dart';
 
 void main() {
   testWidgets('Health score ring animates toward report score', (tester) async {
-    final report = HealthReport(
+    const report = HealthReport(
       score: 88,
-      statusTitle: 'Sehat',
-      statusDescription: 'Mesin dalam kondisi baik',
-      statusColor: AppColors.success,
-      checks: const [],
-      warnings: const [],
+      level: StatusLevel.waspada,
+      statusTitle: 'Perlu perhatian',
+      statusDescription: 'Ada nilai di luar batas normal.',
+      checks: [],
+      warnings: [],
     );
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: report.score / 100),
+            tween: Tween(begin: 0, end: report.score! / 100),
             duration: const Duration(milliseconds: 800),
             curve: Curves.easeOutCubic,
             builder: (context, animatedValue, child) {

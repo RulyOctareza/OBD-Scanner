@@ -1,4 +1,5 @@
 import 'package:autocare/core/obd/obd_telemetry.dart';
+import 'package:autocare/core/ui/status.dart';
 import 'package:autocare/features/health/domain/health_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,12 +28,13 @@ void main() {
 
   test('CheckItem compares by value', () {
     expect(
-      CheckItem(title: 'Aki', isOk: true, detail: '14.1 V'),
-      CheckItem(title: 'Aki', isOk: true, detail: '14.1 V'),
+      const CheckItem(title: 'Aki', level: StatusLevel.ok, detail: '14,1 V'),
+      const CheckItem(title: 'Aki', level: StatusLevel.ok, detail: '14,1 V'),
     );
     expect(
-      CheckItem(title: 'Aki', isOk: true, detail: '14.1 V') ==
-          CheckItem(title: 'Aki', isOk: false, detail: '14.1 V'),
+      const CheckItem(title: 'Aki', level: StatusLevel.ok, detail: '14,1 V') ==
+          const CheckItem(
+              title: 'Aki', level: StatusLevel.waspada, detail: '14,1 V'),
       isFalse,
     );
   });

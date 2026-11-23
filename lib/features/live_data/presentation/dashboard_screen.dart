@@ -9,6 +9,7 @@ import 'widgets/gauge_widget.dart';
 import 'widgets/telemetry_chart_modal.dart';
 import '../../trips/presentation/trip_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
+import '../../../core/ui/segment_switch.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -205,16 +206,10 @@ class DashboardScreen extends ConsumerWidget {
       appBar: isFullscreen
           ? null
           : AppBar(
-              title: const Text(
-                'Meter Cockpit',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.5,
-                ),
+              title: const SegmentSwitch(
+                segments: liveSegments,
+                current: '/dashboard',
               ),
-              centerTitle: true,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
               actions: [
                 IconButton(
                   icon: const Icon(Icons.fullscreen_rounded),

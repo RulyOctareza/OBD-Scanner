@@ -5,6 +5,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/bluetooth/obd_service.dart';
 import '../../../core/widgets/obd_connection_sheet.dart';
 import 'settings_provider.dart';
+import '../../shell/shell_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -48,13 +50,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Pengaturan',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        // Reached through Beranda's gear when the bar has no Pengaturan tab.
+        leading: ShellLayout.settingsInBarOf(context)
+            ? null
+            : BackButton(onPressed: () => context.go('/health')),
+        title: const Text('Pengaturan'),
       ),
       body: SafeArea(
         child: ListView(

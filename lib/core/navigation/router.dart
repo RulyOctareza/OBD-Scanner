@@ -13,12 +13,24 @@ import '../../features/splash/splash_screen.dart';
 import '../../features/splash/obd_intro_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-final GlobalKey<NavigatorState> _healthNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'health');
-final GlobalKey<NavigatorState> _dashboardNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'dashboard');
-final GlobalKey<NavigatorState> _liveDataNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'live_data');
-final GlobalKey<NavigatorState> _timelineNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'timeline');
-final GlobalKey<NavigatorState> _settingsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'settings');
+final GlobalKey<NavigatorState> _homeNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'beranda');
+final GlobalKey<NavigatorState> _liveNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'live');
+final GlobalKey<NavigatorState> _diagnosticsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'diagnostik');
+final GlobalKey<NavigatorState> _timelineNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'riwayat');
+final GlobalKey<NavigatorState> _settingsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'pengaturan');
 
+/// Branch order of the shell; ShellScreen's destinations follow it.
+abstract final class AppTab {
+  static const int beranda = 0;
+  static const int live = 1;
+  static const int diagnostik = 2;
+  static const int riwayat = 3;
+  static const int pengaturan = 4;
+}
+
+// Every path here is a real route and stays so: the dev benchmark
+// (lib/dev/bench) and in-app links open screens by path. A tab that holds two
+// screens has both as routes of its branch, switched with SegmentSwitch.
 final goRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
   initialLocation: '/splash',
@@ -34,23 +46,16 @@ final goRouter = GoRouter(
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const ObdIntroScreen(),
     ),
-    GoRoute(
-      path: '/diagnostics',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const DiagnosticScannerScreen(),
-    ),
-    GoRoute(
-      path: '/dtc_lookup',
-      parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const DtcLookupScreen(),
-    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
-        return ShellScreen(navigationShell: navigationShell);
+        return ShellScreen(
+          navigationShell: navigationShell,
+          location: state.uri.path,
+        );
       },
       branches: [
         StatefulShellBranch(
-          navigatorKey: _healthNavigatorKey,
+          navigatorKey: _homeNavigatorKey,
           routes: [
             GoRoute(
               path: '/health',
@@ -61,7 +66,7 @@ final goRouter = GoRouter(
           ],
         ),
         StatefulShellBranch(
-          navigatorKey: _dashboardNavigatorKey,
+          navigatorKey: _liveNavigatorKey,
           routes: [
             GoRoute(
               path: '/dashboard',
@@ -69,15 +74,27 @@ final goRouter = GoRouter(
                 child: DashboardScreen(),
               ),
             ),
-          ],
-        ),
-        StatefulShellBranch(
-          navigatorKey: _liveDataNavigatorKey,
-          routes: [
             GoRoute(
               path: '/live_data',
               pageBuilder: (context, state) => const NoTransitionPage(
                 child: LiveDataScreen(),
+              ),
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _diagnosticsNavigatorKey,
+          routes: [
+            GoRoute(
+              path: '/diagnostics',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: DiagnosticScannerScreen(),
+              ),
+            ),
+            GoRoute(
+              path: '/dtc_lookup',
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: DtcLookupScreen(),
               ),
             ),
           ],
