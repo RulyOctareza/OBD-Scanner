@@ -2,7 +2,7 @@ blank_issues_enabled: false
 contact_links:
   - name: Dokumentasi alur kerja AutoCare
     url: https://github.com/RulyOctareza/OBD-Scanner/blob/main/docs/alur-kerja.md
-    about: Cara AutoCare tersambung ke adaptor, membaca sensor, dan menyimpan data.
+    about: Cara AutoCare terhubung ke adapter, membaca sensor, dan menyimpan data.
   - name: Kebijakan privasi
     url: https://rulyoctareza.github.io/OBD-Scanner/privacy/
     about: Data apa yang diproses AutoCare dan di mana disimpan.

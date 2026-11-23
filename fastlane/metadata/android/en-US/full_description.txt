@@ -1,42 +1,42 @@
-AutoCare turns a Bluetooth ELM327 OBD-II adapter into a car health monitor on your phone. Plug the adapter into your car's OBD port, connect over Bluetooth, and see how your engine is doing in real time. The app itself is in Indonesian.
+AutoCare turns a Bluetooth OBD adapter (ELM327) into a car health monitor on your phone. Plug the adapter into your car's OBD port, connect over Bluetooth, and see how your engine is doing in real time. The app itself is in Indonesian.
 
 CAR HEALTH SCORE
-• A 0–100 score computed live from engine data: coolant temperature, battery voltage and alternator charging, idle speed, active trouble codes, and your oil-change schedule.
-• Clear warnings, each with a button that takes you straight to the right screen.
+• A 0–100 score computed live from engine data: engine temperature, battery voltage and alternator charging, idle speed, active trouble codes, and your oil-change schedule.
+• A normal, warning, or critical status with what to do next and a button that takes you straight to the right screen.
 
-DIAGNOSTIC SCANNER (DTC)
-• Read active (Mode 03), pending (07), and permanent (0A) trouble codes.
-• Check Engine light (MIL) status and emission readiness (I/M Readiness): misfire, fuel system, catalyst, EVAP, O2 sensors, EGR, and more.
-• Built-in trouble code dictionary: description, symptoms, possible causes, and recommended actions.
-• Reset the Check Engine light (Clear DTC) and copy a diagnostic report to send to your mechanic.
-• Read the VIN and odometer straight from the ECU (when your car supports it).
+SCAN TROUBLE CODES, WITH A CODE DICTIONARY
+• Read active, pending, and permanent diagnostic trouble codes (DTCs).
+• Check Engine light status and emission readiness (I/M): misfire, fuel system, catalyst, EVAP, O2 sensors, EGR, and more.
+• Built-in code dictionary: what each code means, symptoms, possible causes, and recommended actions.
+• Clear trouble codes (this also turns the Check Engine light off) and copy a scan report to send to your mechanic.
+• Read the VIN and odometer straight from the car (when supported).
 
-DASHBOARD AND LIVE DATA
-• Cockpit gauges you can customise, plus a full-screen mode.
-• Real-time sensors: RPM, speed, coolant temperature, battery voltage, intake pressure (MAP), air flow (MAF), intake air temperature, throttle position, engine load, timing advance, and fuel level.
+LIVE DATA: GAUGES AND SENSORS
+• Gauges you can customise, plus a full-screen mode.
+• Real-time sensors: engine speed, vehicle speed, engine temperature, battery voltage, intake pressure (MAP), air flow (MAF), intake air temperature, throttle position, engine load, ignition timing, and fuel remaining.
 • Estimated fuel economy (km/L) and an ECO indicator when you drive efficiently.
-• History chart for every sensor, from 1 minute up to 1 hour.
+• A history chart for every sensor, from 1 minute up to 1 hour.
 
-TRIPS, FUEL, AND SERVICE
-• Trips are recorded automatically while the engine runs and the car moves: distance, duration, average speed, peak temperature, and fuel economy.
+HISTORY: TRIPS, FUEL, AND SERVICE
+• Trips are recorded automatically while the engine runs and the car moves: distance, duration, average speed, peak engine temperature, and fuel economy.
 • Trip A and a daily Trip B, just like your instrument cluster.
 • Log refuels (Pertalite, Pertamax, Pertamax Turbo) with km/L calculated tank-to-tank, and keep a service history: oil, air filter, brakes, radiator flush, and battery. The next oil-change target is set automatically.
-• Everything sits on one timeline with date and type filters.
+• Everything sits in one history with date and type filters.
 
 EASY CONNECTION
-• Find and pair your ELM327 adapter right inside the app; PIN 1234 is entered automatically.
-• Auto-connect to your last adapter, with step-by-step help when a connection fails.
+• Find and pair your adapter right inside the app; PIN 1234 is entered automatically.
+• Connects automatically to your last adapter, with step-by-step help when a connection fails.
 • The connection stays alive while you switch to other apps, such as navigation.
 
 TRY IT WITHOUT A CAR
-Simulator Mode shows every feature with demo data, including simulated overheating, a weak battery, and a Check Engine light.
+Simulator mode shows every feature with sample data, including simulated overheating, a weak battery, and a Check Engine light.
 
 PRIVACY
 No account, no ads, and no internet connection. All your data stays on your phone.
 
 WHAT YOU NEED
-• A Bluetooth Classic ELM327 OBD-II adapter. Bluetooth Low Energy (BLE)-only and Wi-Fi adapters are not supported yet.
-• A car with an OBD-II port, usually under the dashboard near the steering wheel. Available data depends on your car's ECU.
+• A Bluetooth Classic OBD adapter (ELM327). Bluetooth Low Energy (BLE)-only and Wi-Fi adapters are not supported yet.
+• A car with an OBD-II port, usually under the dashboard near the steering wheel. Available data depends on your car.
 • Android 7.0 or newer.
 
 NOTE

@@ -1,1 +1,1 @@
-Cek kesehatan mobil lewat ELM327: kode error, suhu mesin, aki, trip dan servis.
+Cek kesehatan mobil lewat adapter OBD: kode kerusakan, suhu mesin, aki, servis.

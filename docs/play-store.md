@@ -86,7 +86,7 @@ Terjemahan Inggris ditambahkan lewat *Manage translations → Add your own trans
 ### App access
 Pilih **All or some functionality is restricted**, lalu tambahkan instruksi (tanpa username/password):
 
-> No account or login is needed. Most features read data from a Bluetooth ELM327 OBD-II adapter plugged into a car. To review every screen without a car: on the first-run intro choose "Mode Simulator", or open the "Pengaturan" tab and turn on "Mode Simulator (Demo)". The switches below it simulate overheating ("Simulasikan Overheat"), a weak battery ("Simulasikan Aki Lemah") and a Check Engine code ("Simulasikan Check Engine (DTC)"). The diagnostic scanner (Kesehatan tab → "Pindai Diagnostik ECU") also runs in Simulator Mode.
+> No account or login is needed. Most features read data from a Bluetooth ELM327 OBD-II adapter plugged into a car. To review every screen without a car, turn on simulator mode: choose it on the first-run intro, or open the "Pengaturan" tab, section "Simulator". Its switches simulate an overheating engine, a weak battery and a Check Engine trouble code (P0138). Trouble-code scanning ("Diagnostik" tab, "Pindai") also works in simulator mode. Tabs: Beranda (health score), Live (gauges and sensors), Diagnostik (scan and code dictionary), Riwayat (trips, fuel, service), Pengaturan.
 
 ### Ads
 **No, my app does not contain ads.**
@@ -103,22 +103,22 @@ Pilih **All or some functionality is restricted**, lalu tambahkan instruksi (tan
 
 ### Data safety
 - *Does your app collect or share any of the required user data types?* → **No**.
-- Alasannya: AutoCare tidak punya izin INTERNET, tanpa SDK analitik/iklan, dan semua data (telemetri, VIN, perjalanan, BBM, servis, pengaturan, alamat adaptor Bluetooth) hanya disimpan di database lokal. Menurut definisi Play, data yang tidak dikirim keluar dari perangkat tidak termasuk "dikumpulkan".
+- Alasannya: AutoCare tidak punya izin INTERNET, tanpa SDK analitik/iklan, dan semua data (telemetri, VIN, perjalanan, BBM, servis, pengaturan, alamat adapter Bluetooth) hanya disimpan di database lokal. Menurut definisi Play, data yang tidak dikirim keluar dari perangkat tidak termasuk "dikumpulkan".
 - Periksa ulang jawaban ini bila suatu saat ada library jaringan, crash reporting, atau analitik yang ditambahkan.
 
 ### Foreground service permissions
 Deklarasikan tipe **Connected device** (`FOREGROUND_SERVICE_CONNECTED_DEVICE`).
 
 - *Deskripsi penggunaan (EN):*
-  > AutoCare reads live engine data from a Bluetooth Classic ELM327 OBD-II adapter that the user pairs and connects. While the adapter is connected, a connectedDevice foreground service keeps the Bluetooth RFCOMM link and the data polling alive when the user switches to another app (for example navigation while driving), and shows an ongoing notification. It starts only after the user connects an adapter and stops as soon as the adapter disconnects or the user taps "Putus" (Disconnect).
+  > AutoCare reads live engine data from a Bluetooth Classic ELM327 OBD-II adapter that the user pairs and connects. While the adapter is connected, a connectedDevice foreground service keeps the Bluetooth RFCOMM link and the data polling alive when the user switches to another app (for example navigation while driving), and shows an ongoing notification. It starts only after the user connects an adapter and stops as soon as the adapter disconnects or the user taps "Putuskan" (Disconnect).
 - *Dampak bila ditunda/dihentikan sistem (EN):*
   > The Bluetooth link to the adapter would drop when the app goes to the background, so live readings and trip recording would stop in the middle of a drive.
-- *Video* (unggah ke YouTube sebagai *unlisted* atau Google Drive yang bisa diakses publik), rekam dengan adaptor asli. Mode Simulator tidak menyalakan foreground service.
-  1. Buka AutoCare, ketuk banner koneksi, pilih adaptor ELM327, tunggu "Terhubung".
+- *Video* (unggah ke YouTube sebagai *unlisted* atau Google Drive yang bisa diakses publik), rekam dengan adapter asli. Mode simulator tidak menyalakan foreground service.
+  1. Buka AutoCare, ketuk **Hubungkan**, pilih adapter, tunggu status terhubung.
   2. Tarik panel notifikasi: notifikasi AutoCare terlihat.
   3. Tekan Home, buka Google Maps, tunggu beberapa detik.
   4. Kembali ke AutoCare: data sensor tetap berjalan.
-  5. Ketuk "Putus": notifikasi hilang.
+  5. Ketuk **Putuskan**: notifikasi hilang.
 
 ### Lainnya
 | Bagian | Jawaban |
@@ -140,13 +140,13 @@ Deklarasikan tipe **Connected device** (`FOREGROUND_SERVICE_CONNECTED_DEVICE`).
 - [ ] Bagian 1 beres semua.
 - [ ] `flutter analyze` dan `flutter test` hijau.
 - [ ] AAB dibuat dengan `tool/build_verified.sh appbundle --release` dari tree yang sudah di-commit (stempel tanpa `-dirty`) dan ditandatangani upload key (`keytool -printcert -jarfile …`).
-- [ ] APK rilis dicoba di HP dengan install bersih: app terbuka, Mode Simulator berjalan, daftar Bluetooth tampil, connect ke adaptor dan notifikasi muncul.
+- [ ] APK rilis dicoba di HP dengan install bersih: app terbuka, mode simulator berjalan, daftar Bluetooth tampil, terhubung ke adapter dan notifikasi muncul.
 - [ ] Listing `id` dan `en-US` lengkap: teks, ikon, feature graphic, 8 screenshot.
 - [ ] Semua bagian App content berstatus selesai.
 
 ## 7. Memperbarui aset listing
 
-Screenshot dan grafis dibuat ulang dengan dua skrip di [`tool/store_assets/`](../tool/store_assets/README.md): `capture.sh` mengambil screenshot mentah dari HP dalam Mode Simulator, lalu `render.py` membuat semua screenshot berbingkai, feature graphic, ikon, social preview GitHub, dan potongan untuk README.
+Screenshot dan grafis dibuat ulang dengan dua skrip di [`tool/store_assets/`](../tool/store_assets/README.md): `capture.sh` mengambil screenshot mentah dari HP dengan mode simulator, lalu `render.py` membuat semua screenshot berbingkai, feature graphic, ikon, social preview GitHub, dan potongan untuk README.
 
 ## 8. Aset GitHub yang diunggah manual
 

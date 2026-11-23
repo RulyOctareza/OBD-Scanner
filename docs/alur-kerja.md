@@ -1,19 +1,19 @@
 # Alur kerja AutoCare
 
-Dokumen ini menjelaskan cara AutoCare bekerja dari ujung ke ujung: dari adaptor ELM327 yang dicolokkan ke mobil, sampai skor kesehatan, catatan perjalanan, dan data yang tersimpan di HP. Ditulis untuk pengguna yang penasaran dan untuk developer yang akan mengubah kodenya.
+Dokumen ini menjelaskan cara AutoCare bekerja dari ujung ke ujung: dari adapter OBD (ELM327) yang dicolokkan ke mobil, sampai skor kesehatan, catatan perjalanan, dan data yang tersimpan di HP. Ditulis untuk pengguna yang penasaran dan untuk developer yang akan mengubah kodenya.
 
 **Daftar isi**
 
 1. [Gambaran besar](#1-gambaran-besar)
 2. [Perjalanan pengguna di aplikasi](#2-perjalanan-pengguna-di-aplikasi)
-3. [Menyambung ke adaptor](#3-menyambung-ke-adaptor)
+3. [Menghubungkan ke adapter](#3-menghubungkan-ke-adapter)
 4. [Membaca data: polling ELM327](#4-membaca-data-polling-elm327)
-5. [Pemindaian diagnostik dan kode DTC](#5-pemindaian-diagnostik-dan-kode-dtc)
+5. [Pemindaian dan kode kerusakan](#5-pemindaian-dan-kode-kerusakan)
 6. [Skor kesehatan](#6-skor-kesehatan)
 7. [Pencatatan perjalanan](#7-pencatatan-perjalanan)
 8. [Grafik dan metrik turunan](#8-grafik-dan-metrik-turunan)
 9. [Penyimpanan data](#9-penyimpanan-data)
-10. [Mode Simulator](#10-mode-simulator)
+10. [Mode simulator](#10-mode-simulator)
 11. [Berjalan di latar belakang](#11-berjalan-di-latar-belakang)
 12. [Peta kode](#12-peta-kode)
 
@@ -21,18 +21,18 @@ Dokumen ini menjelaskan cara AutoCare bekerja dari ujung ke ujung: dari adaptor 
 
 ## 1. Gambaran besar
 
-AutoCare berbicara dengan mobil lewat satu adaptor **ELM327 Bluetooth Classic** (profil SPP/RFCOMM). Adaptor menerjemahkan perintah teks seperti `010C` menjadi permintaan OBD-II ke ECU, lalu mengembalikan jawabannya sebagai teks heksadesimal. Semua komunikasi dipegang satu objek, `ObdService`, yang menerbitkan satu state (`ObdState`). Seluruh fitur lain bereaksi terhadap state itu.
+AutoCare berbicara dengan mobil lewat satu adapter OBD **ELM327 Bluetooth Classic** (profil SPP/RFCOMM). Adapter menerjemahkan perintah teks seperti `010C` menjadi permintaan OBD-II ke ECU, lalu mengembalikan jawabannya sebagai teks heksadesimal. Semua komunikasi dipegang satu objek, `ObdService`, yang menerbitkan satu state (`ObdState`). Seluruh fitur lain bereaksi terhadap state itu.
 
 ```mermaid
 flowchart LR
-    ECU["ECU mobil"] <-->|"OBD-II (CAN / K-line)"| ELM["Adaptor ELM327"]
+    ECU["ECU mobil"] <-->|"OBD-II (CAN / K-line)"| ELM["Adapter OBD (ELM327)"]
     ELM <-->|"Bluetooth Classic SPP"| SVC["ObdService"]
-    SIM["ObdSimulator<br/>(Mode Simulator)"] -.->|"data demo"| SVC
+    SIM["ObdSimulator<br/>(mode simulator)"] -.->|"data contoh"| SVC
     SVC -->|"ObdState"| HE["HealthEngine<br/>skor kesehatan"]
     SVC -->|"ObdState"| TR["TripRecorder<br/>perjalanan"]
     SVC -->|"ObdState"| CB["LiveChartBuffer<br/>grafik 1 Hz"]
     SVC -->|"ObdState"| ST["Settings<br/>odometer, VIN"]
-    HE --> UI["Layar: Kesehatan, Meter,<br/>Sensor, Linimasa, Diagnostik"]
+    HE --> UI["Layar: Beranda, Live,<br/>Diagnostik, Riwayat"]
     TR --> UI
     CB --> UI
     TR --> DB[("SQLite lokal<br/>(Drift)")]
@@ -47,24 +47,24 @@ Tidak ada server, akun, atau sinkronisasi. Semua data tinggal di HP.
 flowchart TD
     A["Buka aplikasi"] --> B["Splash<br/>tampil minimal 1,6 detik,<br/>menunggu pengaturan sampai 3,5 detik"]
     B --> C{"Intro sudah<br/>pernah selesai?"}
-    C -- "Belum" --> D["Intro OBD<br/>1. izin Bluetooth dan lokasi<br/>2. pilih adaptor ELM327 atau Mode Simulator<br/>3. mulai"]
-    C -- "Sudah" --> E["Tab Kesehatan"]
+    C -- "Belum" --> D["Intro<br/>1. izin Bluetooth (Perangkat di sekitar)<br/>2. pilih adapter OBD atau mode simulator<br/>3. mulai"]
+    C -- "Sudah" --> E["Tab Beranda"]
     D --> E
-    E --- T["Lima tab yang menyimpan posisinya:<br/>Kesehatan · Meter · Sensor · Linimasa · Pengaturan"]
-    E --> G["Scanner Diagnostik<br/>(layar penuh)"]
-    G --> H["Kamus Kode DTC<br/>(layar penuh)"]
-    E --> S["Lembar koneksi OBD-II<br/>(dari banner koneksi atau Pengaturan → Kelola)"]
+    E --- T["Lima tab yang menyimpan posisinya:<br/>Beranda · Live · Diagnostik · Riwayat · Pengaturan"]
+    E --> S["Lembar koneksi adapter OBD<br/>(tombol Hubungkan atau Pengaturan → Koneksi)"]
 ```
 
 | Tab | Isi |
 |---|---|
-| **Kesehatan** | Banner status koneksi, skor kesehatan 0–100, pintasan scanner diagnostik, peringatan dengan tombol aksi, pemeriksaan sistem, ringkasan perjalanan terakhir |
-| **Meter** | Dua gauge besar dan empat indikator kecil yang bisa dipilih, badge ECO, Trip A/B, mode layar penuh |
-| **Sensor** | Semua sensor dalam kartu; ketuk kartu untuk grafik riwayatnya |
-| **Linimasa** | Perjalanan, isi BBM, dan servis dalam satu urutan waktu, dengan filter dan ringkasan |
-| **Pengaturan** | Kartu koneksi + "Sambung otomatis", Mode Simulator dan saklar demonya, informasi kendaraan (nama, VIN, odometer, target ganti oli) |
+| **Beranda** | Status koneksi, skor kesehatan mobil, hal yang perlu perhatian beserta tombol aksinya, pemeriksaan sistem, ringkasan perjalanan terakhir |
+| **Live** | Segmen **Meter** (dua gauge besar, empat indikator kecil yang bisa dipilih, indikator ECO, Trip A/B, layar penuh) dan **Sensor** (semua sensor; ketuk untuk grafik riwayatnya) |
+| **Diagnostik** | Segmen **Pindai** (kode kerusakan, lampu Check Engine, kesiapan uji emisi) dan **Kamus kode** |
+| **Riwayat** | Perjalanan, isi BBM, dan servis dalam satu urutan waktu, dengan filter dan ringkasan |
+| **Pengaturan** | Bagian Mobil (nama, VIN, odometer, target ganti oli), Koneksi (adapter, hubungkan otomatis), Simulator (mode simulator dan saklar simulasinya), dan Tentang |
 
-## 3. Menyambung ke adaptor
+Bila lima label tidak muat di layar kecil, Pengaturan pindah ke ikon gir di Beranda dan bar bawah tinggal empat tab.
+
+## 3. Menghubungkan ke adapter
 
 ### 3.1 Kesiapan Bluetooth
 
@@ -72,19 +72,19 @@ Sebelum menampilkan daftar perangkat, lembar koneksi memeriksa apa yang menghala
 
 | Kondisi | Yang ditampilkan |
 |---|---|
-| Bluetooth Classic tidak ada | Saran memakai Mode Simulator |
+| Bluetooth Classic tidak ada | Saran memakai mode simulator |
 | Izin ditolak | Tombol "Izinkan" untuk meminta ulang |
 | Izin ditolak permanen | Tombol ke halaman izin aplikasi |
 | Bluetooth mati | "Nyalakan Bluetooth" (dialog sistem), lalu daftar dimuat ulang |
-| Siap | Daftar adaptor |
+| Siap | Daftar adapter |
 
 Izin yang diminta adalah `BLUETOOTH_CONNECT` untuk daftar dan koneksi, ditambah `BLUETOOTH_SCAN` untuk mencari perangkat baru. Lokasi hanya diminta di Android 11 ke bawah, dan hanya saat mencari perangkat baru, karena Android versi itu mewajibkannya untuk pencarian Bluetooth Classic.
 
 ### 3.2 Daftar perangkat dan pairing
 
-- **Adapter tersandingkan**: adaptor terakhir dipakai paling atas, lalu perangkat yang namanya mirip adaptor OBD (OBD, ELM, Vgate, iCar, Konnwei, Viecar, BAFX, Carista, …).
-- **Perangkat Bluetooth lain**: perangkat tersandingkan lainnya, diciutkan. Perangkat khusus BLE disembunyikan karena SPP tidak bisa menjangkaunya.
-- **Perangkat baru → Cari**: pencarian Bluetooth Classic (sekitar 12 detik). Mengetuk hasilnya akan menyandingkan dengan PIN **1234** otomatis; kalau gagal, dialog PIN Android muncul (misalnya untuk PIN 0000). Setelah berhasil, AutoCare langsung menyambung.
+- **Adapter yang sudah dipasangkan**: adapter terakhir dipakai paling atas, lalu perangkat yang namanya mirip adapter OBD (OBD, ELM, Vgate, iCar, Konnwei, Viecar, BAFX, Carista, …).
+- **Perangkat Bluetooth lain**: perangkat lain yang sudah dipasangkan, diciutkan. Perangkat khusus BLE disembunyikan karena SPP tidak bisa menjangkaunya.
+- **Perangkat baru → Cari**: pencarian Bluetooth Classic (sekitar 12 detik). Mengetuk hasilnya akan memasangkannya dengan PIN **1234** otomatis; kalau gagal, dialog PIN Android muncul (misalnya untuk PIN 0000). Setelah berhasil, AutoCare langsung menghubungkan.
 
 ### 3.3 Urutan koneksi
 
@@ -96,8 +96,8 @@ sequenceDiagram
     participant O as ObdService
     participant B as Plugin Bluetooth
     participant E as ELM327
-    U->>S: ketuk adaptor
-    S->>O: connectToDevice(adaptor)
+    U->>S: ketuk adapter
+    S->>O: connectToDevice(adapter)
     Note over O: token koneksi baru, koneksi lama ditutup
     O->>B: batalkan discovery, buka socket (batas 40 detik)
     B->>E: RFCOMM kanal 1, lalu SDP secure, lalu SDP insecure
@@ -106,38 +106,38 @@ sequenceDiagram
     O->>E: AT E0 (echo mati, 3 detik)
     O->>E: AT SP 0 (protokol otomatis, 3 detik)
     O->>E: 0100 (pemanasan protokol, 15 detik, boleh gagal)
-    Note over O: simpan adaptor terakhir, mulai polling, nyalakan foreground service
+    Note over O: simpan adapter terakhir, mulai polling, nyalakan foreground service
     O-->>S: status Terhubung
     S-->>U: getar singkat, lembar menutup sendiri
 ```
 
 - Koneksi manual dicoba sampai **2 kali**, auto-connect **1 kali**. Teks langkah ("Membuka koneksi Bluetooth…", "Menyiapkan adapter ELM327…", "Mendeteksi protokol mobil…") tampil di lembar koneksi.
-- Setiap perintah init dicoba dua kali. Pemanasan `0100` memberi waktu pencarian protokol, yang di mobil K-line bisa makan beberapa detik. Tanpa pemanasan, polling akan memotong pencarian itu. Bila mobil tidak menjawab (misalnya kontak mati), koneksi tetap dianggap tersambung.
-- Bila gagal, pesan singkat tampil di banner, dan **Langkah perbaikan** (adaptor tidak bertenaga, dipakai aplikasi lain, bond Bluetooth basi, perangkat salah) tampil di lembar koneksi bersama tombol **Coba Lagi**.
-- **Batal** dan **Putus** selalu berakhir di status terputus, bukan error.
+- Setiap perintah init dicoba dua kali. Pemanasan `0100` memberi waktu pencarian protokol, yang di mobil K-line bisa makan beberapa detik. Tanpa pemanasan, polling akan memotong pencarian itu. Bila mobil tidak menjawab (misalnya kontak mati), koneksi tetap dianggap terhubung.
+- Bila gagal, pesan singkat tampil di banner, dan **Langkah perbaikan** (adapter tidak bertenaga, dipakai aplikasi lain, pasangan Bluetooth basi, perangkat salah) tampil di lembar koneksi bersama tombol **Coba lagi**.
+- **Batal** dan **Putuskan** selalu berakhir di status terputus, bukan gagal.
 
-### 3.4 Status koneksi dan sambung ulang
+### 3.4 Status koneksi dan koneksi ulang
 
 ```mermaid
 stateDiagram-v2
     [*] --> Terputus
-    Terputus --> Menyambung: ketuk adaptor / auto-connect
-    Menyambung --> Inisialisasi: socket terbuka
+    Terputus --> Menghubungkan: ketuk adapter / koneksi otomatis
+    Menghubungkan --> Inisialisasi: socket terbuka
     Inisialisasi --> Terhubung: AT Z, AT E0, AT SP 0 berhasil
-    Menyambung --> Error: socket gagal
-    Inisialisasi --> Error: init ELM327 gagal
-    Menyambung --> Terputus: Batal
+    Menghubungkan --> Gagal: socket gagal
+    Inisialisasi --> Gagal: init ELM327 gagal
+    Menghubungkan --> Terputus: Batal
     Inisialisasi --> Terputus: Batal
-    Terhubung --> Terputus: Putus
-    Terhubung --> Error: koneksi hilang
-    Error --> Menyambung: Coba Lagi / auto-reconnect
+    Terhubung --> Terputus: Putuskan
+    Terhubung --> Gagal: koneksi hilang
+    Gagal --> Menghubungkan: Coba lagi / koneksi ulang otomatis
 ```
 
-- Saat aplikasi dibuka, auto-connect menunggu **3 detik** (memberi waktu dongle melepas socket sesi sebelumnya), lalu memakai alamat adaptor terakhir tanpa meminta izin apa pun.
-- Sambung ulang otomatis memakai jeda bertingkat **15 → 30 → 60 → 120 detik** (maksimal), kembali ke 15 detik setelah berhasil.
-- Auto-reconnect hanya berjalan bila "Sambung otomatis" aktif, Mode Simulator mati, pengguna tidak sedang menekan Putus/Batal, dan lembar koneksi tidak sedang terbuka.
+- Saat aplikasi dibuka, koneksi otomatis menunggu **3 detik** (memberi waktu adapter melepas socket sesi sebelumnya), lalu memakai alamat adapter terakhir tanpa meminta izin apa pun.
+- Koneksi ulang otomatis memakai jeda bertingkat **15 → 30 → 60 → 120 detik** (maksimal). Setelah koneksi berhasil, jeda kembali ke 15 detik dan cek berikutnya langsung dijadwalkan ulang, sehingga link yang putus di jalan dicoba lagi paling lambat 15 detik kemudian.
+- Koneksi otomatis, baik saat aplikasi dibuka maupun koneksi ulang berkala, memakai satu aturan yang sama: hubungkan otomatis aktif di Pengaturan, mode simulator mati, adapter sedang tidak terhubung, pengguna tidak baru saja menekan **Batal** atau **Putuskan**, dan lembar koneksi tidak sedang terbuka. Larangan karena Batal/Putuskan baru dicabut saat pengguna menghubungkan secara manual atau menyalakan lagi hubungkan otomatis.
 
-Dongle ELM327 hanya menerima **satu** klien. Socket yang terbuka tapi tidak dilacak akan membuat dongle "sibuk" sampai aplikasi ditutup paksa. Karena itu setiap percobaan koneksi membawa token, setiap socket membawa nomor generasi, dan socket yang baru terbuka setelah batas waktu atau setelah dibatalkan langsung ditutup.
+Adapter ELM327 hanya menerima **satu** klien. Socket yang terbuka tapi tidak dilacak akan membuat adapter "sibuk" sampai aplikasi ditutup paksa. Karena itu setiap percobaan koneksi membawa token, setiap socket membawa nomor generasi, dan socket yang baru terbuka setelah batas waktu atau setelah dibatalkan langsung ditutup.
 
 ## 4. Membaca data: polling ELM327
 
@@ -158,40 +158,40 @@ Urutan polling, diulang terus tanpa jeda:
 
 | Perintah | Data | Rumus |
 |---|---|---|
-| `AT RV` | Tegangan aki (dibaca adaptor) | angka dari jawaban, V |
+| `AT RV` | Tegangan aki (dibaca adapter) | angka dari jawaban, V |
 | `010C` | Putaran mesin | (A·256 + B) / 4 rpm |
 | `010D` | Kecepatan | A km/jam |
-| `0105` | Suhu pendingin | A − 40 °C |
+| `0105` | Suhu mesin (cairan pendingin) | A − 40 °C |
 | `010F` | Suhu udara masuk | A − 40 °C |
 | `010B` | Tekanan intake (MAP) | A kPa |
 | `0110` | Aliran udara (MAF) | (A·256 + B) / 100 g/s |
-| `010E` | Timing advance | A / 2 − 64 ° |
+| `010E` | Waktu pengapian | A / 2 − 64 ° |
 | `0111` | Bukaan gas | A · 100 / 255 % |
 | `0104` | Beban mesin | A · 100 / 255 % (`FF` dianggap tidak didukung) |
 | `01A6` | Odometer | ABCD / 10 km (hanya ECU baru) |
-| `012F` | Level BBM | A · 100 / 255 % |
-| `03` | Kode DTC aktif | sekali tiap **20 siklus** penuh |
+| `012F` | Sisa BBM | A · 100 / 255 % |
+| `03` | Kode kerusakan aktif | sekali tiap **20 siklus** penuh |
 
 - Jawaban dicari dari kemunculan **terakhir** `41`+PID, sehingga echo, `SEARCHING...`, dan header multi-ECU di depannya terlewati.
 - PID yang tidak pernah menjawab ditandai "tidak didukung ECU ini". Meter dan Sensor menampilkan status itu, bukan angka nol yang menyesatkan.
 - Perintah sekali jalan (scan diagnostik, baca VIN/odometer, hapus DTC) dijalankan lewat satu antrean yang **menghentikan polling**, menunggu jawaban poll yang sedang berjalan (maksimal 3 detik), menjalankan perintahnya, lalu memulai polling lagi.
 
-## 5. Pemindaian diagnostik dan kode DTC
+## 5. Pemindaian dan kode kerusakan
 
 ```mermaid
 flowchart TD
-    S["Mulai Pemindaian ECU"] --> P["Hentikan polling sementara"]
+    S["Pindai"] --> P["Hentikan polling sementara"]
     P --> A["AT DP: protokol"] --> V["0902: VIN"] --> O["01A6: odometer"]
-    O --> C["0100: jumlah PID didukung"] --> D3["03: DTC aktif"]
-    D3 --> D7["07: DTC pending"] --> DA["0A: DTC permanen"] --> R["0101: lampu MIL +<br/>kesiapan emisi"]
+    O --> C["0100: jumlah PID didukung"] --> D3["03: kode aktif"]
+    D3 --> D7["07: kode tertunda"] --> DA["0A: kode permanen"] --> R["0101: lampu Check Engine +<br/>kesiapan uji emisi"]
     R --> X["Tampilkan laporan,<br/>lanjutkan polling"]
 ```
 
 - Setiap langkah punya batas waktu sendiri (3–4 detik). Langkah yang tidak dijawab dilewati, bukan dianggap gagal, karena banyak mobil lama tidak mendukung `0902`, `01A6`, atau `0A`.
-- **Lampu MIL** diambil dari bit 7 byte A `0101`. **Kesiapan emisi** mencakup pengapian, sistem bahan bakar, komponen, katalis, EVAP, sensor O2, pemanas O2, dan EGR.
+- **Lampu Check Engine (MIL)** diambil dari bit 7 byte A `0101`. **Kesiapan uji emisi (I/M)** mencakup pengapian, sistem bahan bakar, komponen, katalis, EVAP, sensor O2, pemanas O2, dan EGR.
 - VIN yang valid diterjemahkan menjadi merek, model (untuk model populer di Indonesia), dan tahun, lalu dipakai sebagai nama mobil di Pengaturan.
-- **Reset MIL / Clear DTC** mengirim mode `04`, yang juga mematikan lampu Check Engine dan mereset monitor kesiapan. Kode yang dihapus dicatat ke riwayat `dtc_logs`.
-- **Kamus Kode DTC** berisi kode umum dengan judul, kategori, tingkat bahaya, deskripsi berbahasa Indonesia, gejala, kemungkinan penyebab, dan rekomendasi. Kode yang tidak dikenal mendapat penjelasan umum berdasarkan hurufnya (P/C/B/U). Laporan diagnostik bisa disalin sebagai teks untuk dikirim ke bengkel.
+- **Hapus kode kerusakan** mengirim mode `04`: lampu Check Engine mati dan data kesiapan uji emisi ikut terhapus, tetapi kerusakannya belum tentu hilang. Kode yang dihapus dicatat ke riwayat `dtc_logs`.
+- **Kamus kode** berisi kode umum dengan judul, kategori, tingkat bahaya, deskripsi berbahasa Indonesia, gejala, kemungkinan penyebab, dan rekomendasi. Kode yang tidak dikenal mendapat penjelasan umum berdasarkan hurufnya (P/C/B/U). Laporan pemindaian bisa disalin sebagai teks untuk dikirim ke bengkel.
 
 ## 6. Skor kesehatan
 
@@ -199,14 +199,14 @@ flowchart TD
 
 | Pemeriksaan | Kondisi | Pengurangan |
 |---|---|---|
-| Suhu pendingin | > 115 °C (kritis) / > 105 °C / > 100 °C | −35 / −15 / −5 |
+| Suhu mesin | > 115 °C (kritis) / > 105 °C / > 100 °C | −35 / −15 / −5 |
 | Aki, mesin hidup | < 12,8 V (pengisian/alternator lemah) | −15 |
 | Aki, mesin mati | < 11,8 V (aki lemah) | −10 |
-| Kode DTC | per kode aktif | −20 |
+| Kode kerusakan | per kode aktif | −20 |
 | Idle | mesin hidup, diam, RPM di luar 650–1100 | −5 |
 | Oli | odometer melewati target ganti oli / kurang dari 2.500 km lagi | −10 / −2 |
 
-Skor mulai dari 100 dan dibatasi 0–100. **≥ 95** berarti "DALAM KONDISI PRIMA", **80–94** "BUTUH PERHATIAN RINGAN", dan **< 80** "PERIKSA KENDARAAN SEGERA". Setiap peringatan punya tombol aksi ke layar yang relevan (Meter, Sensor, Diagnostik, atau Linimasa). Target ganti oli diatur manual, atau otomatis menjadi odometer + 5.000 km setiap kali catatan "Ganti Oli" disimpan.
+Skor mulai dari 100 dan dibatasi 0–100. **≥ 95** berarti kondisi baik, **80–94** perlu perhatian ringan, dan **< 80** mobil perlu segera diperiksa. Satu kode kerusakan aktif saja sudah cukup untuk masuk kelompok terakhir. Setiap peringatan punya tombol aksi ke layar yang relevan (Live, Diagnostik, atau Riwayat). Target ganti oli diatur manual, atau otomatis menjadi odometer + 5.000 km setiap kali catatan "Ganti Oli" disimpan.
 
 ## 7. Pencatatan perjalanan
 
@@ -217,14 +217,14 @@ stateDiagram-v2
     Merekam --> Merekam: tiap update: jarak, BBM, maksimum, rata-rata<br/>titik data tiap 5 detik
     Merekam --> Disimpan: koneksi putus atau RPM ≤ 500
     Disimpan --> Siaga
-    Merekam --> Dibuang: Mode Simulator dinyalakan
+    Merekam --> Dibuang: mode simulator dinyalakan
     Dibuang --> Siaga
 ```
 
-- Jarak dihitung dari kecepatan OBD terhadap waktu nyata (bukan GPS). Jeda ≥ 10 detik (misalnya saat sambung ulang) tidak dihitung sebagai jarak.
+- Jarak dihitung dari kecepatan OBD terhadap waktu nyata (bukan GPS). Jeda ≥ 10 detik (misalnya saat koneksi ulang) tidak dihitung sebagai jarak.
 - Saat disimpan: waktu selesai, jarak, kecepatan rata-rata, suhu dan RPM maksimum, durasi, menit idle, konsumsi km/L, dan skor kesehatan perjalanan (−15 bila suhu pernah > 105 °C, −20 lagi bila > 115 °C). Jarak perjalanan ditambahkan ke odometer.
-- **Trip A** berjalan sampai direset. **Trip B** adalah meter harian yang kembali ke 0 setiap hari baru. Keduanya bisa direset dengan menekan lama di Meter.
-- Tidak ada perjalanan yang dicatat dalam Mode Simulator, supaya data demo tidak bercampur dengan riwayat asli.
+- **Trip A** berjalan sampai direset. **Trip B** adalah meter harian yang kembali ke 0 setiap hari baru. Keduanya bisa direset dengan menekan lama di Live → Meter.
+- Tidak ada perjalanan yang dicatat dalam mode simulator, supaya data contoh tidak bercampur dengan riwayat asli.
 
 ## 8. Grafik dan metrik turunan
 
@@ -293,28 +293,28 @@ erDiagram
     }
 ```
 
-- `vehicles` hanya memakai satu baris; banyak kendaraan belum didukung.
-- `user_preferences` menyimpan pengaturan sebagai pasangan kunci–nilai, misalnya nama mobil, odometer, target oli, pilihan gauge, Mode Simulator, sambung otomatis, adaptor terakhir, dan Trip A/B.
+- `vehicles` hanya memakai satu baris; banyak mobil belum didukung.
+- `user_preferences` menyimpan pengaturan sebagai pasangan kunci–nilai, misalnya nama mobil, odometer, target oli, pilihan gauge, mode simulator, hubungkan otomatis, adapter terakhir, dan Trip A/B.
 - **Odometer** punya beberapa penulis: PID `01A6` dari ECU (bila didukung), penambahan jarak di akhir perjalanan, dan angka yang diketik saat mencatat BBM atau servis.
 - **km/L isi BBM** memakai metode isi penuh ke isi penuh: (odometer sekarang − odometer isi sebelumnya) / liter isi sekarang.
 - Kolom baru di tabel wajib nullable atau punya nilai default, dan ditambahkan di migrasi (`onUpgrade`).
 
-## 10. Mode Simulator
+## 10. Mode simulator
 
-Mode Simulator mengalirkan data palsu lewat `ObdState` yang sama dengan koneksi asli, sehingga setiap layar bisa dicoba tanpa mobil. `ObdSimulator` mengirim data setiap 500 ms: kecepatan bergelombang 0–75 km/jam, RPM mengikuti model gigi sederhana, odometer mulai dari 161.420 km, dan BBM mulai dari 72,5 %. Simulasi hanya maju pada tick timer; menekan saklar demo hanya mengirim ulang kondisi terakhir, sehingga odometer tidak bertambah sendiri.
+Mode simulator mengalirkan data contoh lewat `ObdState` yang sama dengan koneksi asli, sehingga setiap layar bisa dicoba tanpa mobil. `ObdSimulator` mengirim data setiap 500 ms: kecepatan bergelombang 0–75 km/jam, RPM mengikuti model gigi sederhana, odometer mulai dari 161.420 km, dan BBM mulai dari 72,5 %. Simulasi hanya maju pada tick timer; menekan saklar simulasi hanya mengirim ulang kondisi terakhir, sehingga odometer tidak bertambah sendiri.
 
-| Saklar demo (Pengaturan) | Efek |
+| Saklar simulasi (Pengaturan → Simulator) | Efek |
 |---|---|
-| Kontak / Mesin Menyala | Mati: RPM 0, kecepatan 0, suhu turun pelan |
-| Simulasikan Overheat | Target suhu pendingin 109 °C |
-| Simulasikan Aki Lemah | Tegangan 11,4 V saat mesin hidup |
-| Simulasikan Check Engine | Menyuntikkan kode `P0138` |
+| Mesin menyala | Mati: putaran mesin 0, kecepatan 0, suhu mesin turun pelan |
+| Mesin terlalu panas | Target suhu mesin 109 °C |
+| Aki lemah | Tegangan 11,4 V saat mesin hidup |
+| Lampu Check Engine | Menambahkan kode kerusakan `P0138` |
 
-Scanner diagnostik dalam Mode Simulator menjalankan pemindaian bertahap palsu dengan VIN demo yang diterjemahkan menjadi "Toyota Agya (2019)". Menyalakan Mode Simulator memutus koneksi asli dan menghentikan sambung ulang otomatis.
+Pemindaian dalam mode simulator berjalan bertahap dengan data contoh dan VIN contoh yang diterjemahkan menjadi "Toyota Agya (2019)". Menyalakan mode simulator memutus koneksi asli dan menghentikan koneksi ulang otomatis.
 
 ## 11. Berjalan di latar belakang
 
-Saat adaptor asli terhubung, AutoCare menyalakan **foreground service** bertipe `connectedDevice` dengan notifikasi status. Service ini tidak membaca OBD sendiri; tugasnya menjaga proses aplikasi tetap hidup, sehingga socket Bluetooth dan polling tidak dimatikan Android saat kamu membuka aplikasi lain, misalnya navigasi.
+Saat adapter asli terhubung, AutoCare menyalakan **foreground service** bertipe `connectedDevice` dengan notifikasi status. Service ini tidak membaca OBD sendiri; tugasnya menjaga proses aplikasi tetap hidup, sehingga socket Bluetooth dan polling tidak dimatikan Android saat pengguna membuka aplikasi lain, misalnya navigasi.
 
 ```mermaid
 sequenceDiagram
@@ -324,7 +324,7 @@ sequenceDiagram
     O->>C: start (setelah koneksi berhasil)
     C->>F: startForegroundService
     Note over F: notifikasi status + wake lock parsial
-    O->>C: stop (putus, batal, koneksi hilang, Mode Simulator)
+    O->>C: stop (putuskan, batal, koneksi hilang, mode simulator)
     C->>F: stopService
     Note over F: notifikasi hilang, wake lock dilepas
 ```

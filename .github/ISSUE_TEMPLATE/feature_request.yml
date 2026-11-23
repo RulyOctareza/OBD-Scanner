@@ -20,5 +20,5 @@ body:
   - type: input
     id: car
     attributes:
-      label: Mobil dan adaptor yang kamu pakai (opsional)
+      label: Mobil dan adapter yang Anda pakai (opsional)
       placeholder: "Contoh: Honda Brio 2020, Vgate iCar 2"

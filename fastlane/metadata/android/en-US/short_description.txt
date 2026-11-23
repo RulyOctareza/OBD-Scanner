@@ -1,1 +1,1 @@
-Check your car with an ELM327: trouble codes, live sensors, trips and services.
+Check your car with an OBD adapter: trouble codes, live sensors, trips, service.

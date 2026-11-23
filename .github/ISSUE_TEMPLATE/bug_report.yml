@@ -6,14 +6,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Terima kasih sudah melapor! Data HP, adaptor, dan mobil sangat membantu, karena perilaku ELM327 dan ECU berbeda-beda.
+        Terima kasih sudah melapor. Data HP, adapter, dan mobil sangat membantu, karena perilaku adapter ELM327 dan mobil berbeda-beda.
         Jangan cantumkan VIN lengkap atau data pribadi lain di laporan publik ini.
   - type: textarea
     id: what-happened
     attributes:
       label: Apa yang terjadi?
-      description: Jelaskan masalahnya dan apa yang kamu harapkan terjadi.
-      placeholder: "Contoh: setelah ketuk adaptor, muncul 'Koneksi gagal' padahal lampu adaptor menyala."
+      description: Jelaskan masalahnya dan apa yang Anda harapkan terjadi.
+      placeholder: "Contoh: setelah mengetuk adapter, muncul 'Koneksi gagal' padahal lampu adapter menyala."
     validations:
       required: true
   - type: textarea
@@ -31,8 +31,8 @@ body:
     attributes:
       label: Mode koneksi saat masalah terjadi
       options:
-        - Adaptor ELM327 asli
-        - Mode Simulator
+        - Adapter OBD asli
+        - Mode simulator
     validations:
       required: true
   - type: input
@@ -52,7 +52,7 @@ body:
   - type: input
     id: adapter
     attributes:
-      label: Adaptor OBD-II
+      label: Adapter OBD
       description: Nama yang tampil di daftar Bluetooth, merek, dan versi bila tahu.
       placeholder: "Contoh: OBDII / Vgate iCar 2 / ELM327 v1.5"
   - type: input
