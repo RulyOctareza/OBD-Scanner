@@ -47,6 +47,8 @@ Future<void> main() async {
   }
 
   final dir = await getApplicationDocumentsDirectory();
+  final only = File('${dir.path}/bench_only.txt');
+  if (only.existsSync()) benchOnly = only.readAsStringSync().trim();
   BenchRunner.resultsFile = File('${dir.path}/bench_results.jsonl')
     ..writeAsStringSync('');
 
@@ -87,6 +89,7 @@ Future<void> main() async {
     'mode': kProfileMode ? 'profile' : (kReleaseMode ? 'release' : 'debug'),
     // Build stamp (tool/build_verified.sh): proves which build each result is.
     'src_rev': const String.fromEnvironment('SRC_REV'),
+    'only': benchOnly,
     'main_to_first_frame_ms': firstFrameMs,
     'cached_fonts_deleted': cachedFonts.length,
     'seed_ms': seedClock.elapsedMilliseconds,

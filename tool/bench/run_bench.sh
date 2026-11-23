@@ -11,7 +11,7 @@ set -euo pipefail
 
 OUT=${1:?usage: tool/bench/run_bench.sh <out-dir> [--no-build]}
 RUNS=${RUNS:-3}
-PKG=com.autocare.autocare.bench
+PKG=${PKG:-com.autocare.autocare.bench}
 ACTIVITY=com.autocare.autocare.MainActivity
 APK=${APK:-build/app/outputs/flutter-apk/app-profile.apk}
 mkdir -p "$OUT"
@@ -24,7 +24,8 @@ if [[ "${2:-}" != "--no-build" ]]; then
     -P autocareBench=true | tee "$OUT/build.txt"
 fi
 ls -l "$APK" > "$OUT/apk.txt"
-adb install -r "$APK" > /dev/null
+# NO_INSTALL=1 runs the package already installed (interleaved drivers).
+if [[ -z "${NO_INSTALL:-}" ]]; then adb install -r "$APK" > /dev/null; fi
 
 # CPU clusters (policy 0 and 4 on the Snapdragon 450) and GPU clocks once a
 # second, in logcat's time format, to compare clocks per scenario window
@@ -90,6 +91,13 @@ for i in $(seq 1 "$RUNS"); do
   # install -r keeps app data: a run that never starts must not hand back the
   # previous run's results file.
   adb shell run-as "$PKG" rm -f app_flutter/bench_results.jsonl > /dev/null 2>&1 || true
+  # SCENARIO=<name>: this process runs only that scenario (after the same
+  # connect and warm-up as every run).
+  if [[ -n "${SCENARIO:-}" ]]; then
+    adb shell "run-as $PKG sh -c 'mkdir -p app_flutter && echo $SCENARIO > app_flutter/bench_only.txt'"
+  else
+    adb shell run-as "$PKG" rm -f app_flutter/bench_only.txt > /dev/null 2>&1 || true
+  fi
   start_sampler "$OUT/run$i-freq.txt"
   adb shell am start -W -n "$PKG/$ACTIVITY" > "$OUT/run$i-am-start.txt"
   started=$SECONDS

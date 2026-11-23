@@ -25,12 +25,17 @@ const benchTag = 'AUTOCARE_BENCH';
 
 const _window = Duration(seconds: 20);
 
-/// Comma-separated scenario names to run (--dart-define=BENCH_ONLY=...),
-/// for quick A/B builds; empty runs the full script.
-const _only = String.fromEnvironment('BENCH_ONLY');
+/// Comma-separated scenario names to run: the host's bench_only.txt in the
+/// app's documents directory (one scenario per process, see run_bench.sh
+/// SCENARIO=...), else --dart-define=BENCH_ONLY=...; empty runs the script.
+String benchOnly = const String.fromEnvironment('BENCH_ONLY');
 
 bool _wants(String scenario) =>
-    _only.isEmpty || _only.split(',').contains(scenario);
+    benchOnly.isEmpty || benchOnly.split(',').contains(scenario);
+
+/// Same warm-up before the first measured scenario in every run, so a
+/// scenario's numbers do not depend on what ran before it.
+const _warmUp = Duration(seconds: 10);
 const _settle = Duration(seconds: 3);
 
 /// Fixed scenario script. Every scenario settles, then measures one window.
@@ -84,6 +89,7 @@ class BenchRunner {
     );
     final linkClock = Stopwatch()..start();
     final answersAtConnect = adapter.answers;
+    await Future<void>.delayed(_warmUp);
 
     if (_wants('meter_drive')) await _screen('meter_drive', '/dashboard');
     if (_wants('sensor_drive')) await _screen('sensor_drive', '/live_data');
