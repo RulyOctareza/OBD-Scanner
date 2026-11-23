@@ -5,18 +5,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _gauge(double? value) => MaterialApp(
-      home: Scaffold(
-        body: GaugeWidget(
-          value: value,
-          config: ObdMetricConfig.of(ObdMetricType.rpm),
-          onTap: () {},
-        ),
-      ),
-    );
+  home: Scaffold(
+    body: GaugeWidget(
+      value: value,
+      config: ObdMetricConfig.of(ObdMetricType.rpm),
+      onTap: () {},
+    ),
+  ),
+);
 
 void main() {
-  testWidgets('a rebuild with the same value does not restart the animation',
-      (tester) async {
+  testWidgets('a rebuild with the same value does not restart the animation', (
+    tester,
+  ) async {
     await tester.pumpWidget(_gauge(1000));
     await tester.pumpWidget(_gauge(3000)); // starts the 220 ms animation
     await tester.pump(const Duration(milliseconds: 150));
@@ -35,19 +36,26 @@ void main() {
     expect(find.text('2.400'), findsOneWidget);
   });
 
-  testWidgets('dial is a cached track layer under a value layer', (tester) async {
+  testWidgets('dial draws track and value in one repaint boundary', (
+    tester,
+  ) async {
     await tester.pumpWidget(_gauge(1200));
-    final painters = tester
+    final dials = tester
         .widgetList<CustomPaint>(find.byType(CustomPaint))
-        .map((p) => p.painter)
+        .where((p) => p.painter is GaugeTrackPainter)
         .toList();
-    expect(painters.whereType<GaugeTrackPainter>(), hasLength(1));
-    expect(painters.whereType<GaugeValuePainter>(), hasLength(1));
+    expect(dials, hasLength(1));
+    expect(dials.single.foregroundPainter, isA<GaugeValuePainter>());
+    expect(
+      tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .where((p) => p.painter is GaugeValuePainter),
+      isEmpty,
+      reason: 'no separate value layer (A/B: it measured no better)',
+    );
     expect(
       find.ancestor(
-        of: find.byWidgetPredicate(
-          (w) => w is CustomPaint && w.painter is GaugeTrackPainter,
-        ),
+        of: find.byWidget(dials.single),
         matching: find.byType(RepaintBoundary),
       ),
       findsWidgets,

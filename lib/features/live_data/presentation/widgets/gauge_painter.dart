@@ -3,10 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show ValueListenable, listEquals;
 import 'package:flutter/material.dart';
 
-// The gauge is painted in two layers. The track (background arc, zone bands,
-// ticks) depends only on the metric and is cached in its own layer. The value
-// layer is one arc that repaints from the animation without rebuilding any
-// widget; it allocates nothing per frame.
+// The dial is one layer: the track (background arc, zone bands, ticks) and
+// the value arc are drawn together in one CustomPaint inside one
+// RepaintBoundary, repainted from the animation without rebuilding any widget.
+// A separate cached track layer measured no better on the SM-A605G (Skia GL
+// re-rasterizes both layers every frame anyway), so it was dropped. The value
+// arc allocates nothing per frame.
 
 const double _startAngle = 135.0 * (math.pi / 180);
 const double _sweepAngle = 270.0 * (math.pi / 180);
@@ -16,7 +18,10 @@ const double _zoneGap = 4;
 const int _tickCount = 10;
 
 double _radius(Size size) =>
-    math.min(size.width, size.height) / 2 - _strokeWidth / 2 - _zoneGap - _zoneWidth;
+    math.min(size.width, size.height) / 2 -
+    _strokeWidth / 2 -
+    _zoneGap -
+    _zoneWidth;
 
 /// A band of the scale drawn in a status colour, e.g. the coolant range above
 /// 100 °C. The value arc takes the colour of the band it ends in.
@@ -115,7 +120,11 @@ class GaugeTrackPainter extends CustomPainter {
       final angle = _startAngle + _sweepAngle * (i / _tickCount);
       final inner = outer - (i % 5 == 0 ? 8 : 4);
       final direction = Offset(math.cos(angle), math.sin(angle));
-      canvas.drawLine(center + direction * inner, center + direction * outer, tickPaint);
+      canvas.drawLine(
+        center + direction * inner,
+        center + direction * outer,
+        tickPaint,
+      );
     }
   }
 
@@ -137,7 +146,7 @@ class GaugeValuePainter extends CustomPainter {
     required this.zones,
   }) : super(repaint: value);
 
-  /// Displayed value; every change repaints this layer only.
+  /// Displayed value; every change repaints the dial (not the card).
   final ValueListenable<double> value;
   final double minValue;
   final double maxValue;
@@ -163,7 +172,10 @@ class GaugeValuePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (_size != size) {
       _size = size;
-      _rect = Rect.fromCircle(center: size.center(Offset.zero), radius: _radius(size));
+      _rect = Rect.fromCircle(
+        center: size.center(Offset.zero),
+        radius: _radius(size),
+      );
     }
     final v = value.value;
     final fraction = _fraction(v, minValue, maxValue);
@@ -181,8 +193,8 @@ class GaugeValuePainter extends CustomPainter {
       !listEquals(old.zones, zones);
 }
 
-/// The dial of a gauge: a cached track layer under a value layer that follows
-/// [value]. Takes explicit paint parameters, not a metric config.
+/// The dial of a gauge: track and value arc in one repaint boundary that
+/// follows [value]. Takes explicit paint parameters, not a metric config.
 class GaugeDial extends StatelessWidget {
   const GaugeDial({
     super.key,
@@ -209,34 +221,26 @@ class GaugeDial extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dimensions = Size(size, size);
-    return Stack(
-      children: [
-        RepaintBoundary(
-          child: CustomPaint(
-            size: dimensions,
-            painter: GaugeTrackPainter(
-              minValue: minValue,
-              maxValue: maxValue,
-              trackColor: trackColor,
-              tickColor: tickColor,
-              zones: zones,
-            ),
-          ),
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: Size(size, size),
+        painter: GaugeTrackPainter(
+          minValue: minValue,
+          maxValue: maxValue,
+          trackColor: trackColor,
+          tickColor: tickColor,
+          zones: zones,
         ),
-        RepaintBoundary(
-          child: CustomPaint(
-            size: dimensions,
-            painter: GaugeValuePainter(
-              value: value,
-              minValue: minValue,
-              maxValue: maxValue,
-              color: color,
-              zones: zones,
-            ),
-          ),
+        // The value painter's repaint listenable repaints this whole
+        // CustomPaint, track included.
+        foregroundPainter: GaugeValuePainter(
+          value: value,
+          minValue: minValue,
+          maxValue: maxValue,
+          color: color,
+          zones: zones,
         ),
-      ],
+      ),
     );
   }
 }
