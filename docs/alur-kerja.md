@@ -170,7 +170,7 @@ Urutan polling, diulang terus tanpa jeda:
 | `0104` | Beban mesin | A · 100 / 255 % (`FF` dianggap tidak didukung) |
 | `01A6` | Odometer | ABCD / 10 km (hanya ECU baru) |
 | `012F` | Sisa BBM | A · 100 / 255 % |
-| `03` | Kode kerusakan aktif | sekali tiap **20 siklus** penuh |
+| `03` | Kode kerusakan aktif | di akhir siklus pertama tiap koneksi, lalu sekali tiap **20 siklus** |
 
 - Jawaban dicari dari kemunculan **terakhir** `41`+PID, sehingga echo, `SEARCHING...`, dan header multi-ECU di depannya terlewati.
 - PID yang tidak pernah menjawab ditandai "tidak didukung ECU ini". Meter dan Sensor menampilkan status itu, bukan angka nol yang menyesatkan.
@@ -190,7 +190,20 @@ flowchart TD
 - Setiap langkah punya batas waktu sendiri (3–4 detik). Langkah yang tidak dijawab dilewati, bukan dianggap gagal, karena banyak mobil lama tidak mendukung `0902`, `01A6`, atau `0A`.
 - **Lampu Check Engine (MIL)** diambil dari bit 7 byte A `0101`. **Kesiapan uji emisi (I/M)** mencakup pengapian, sistem bahan bakar, komponen, katalis, EVAP, sensor O2, pemanas O2, dan EGR.
 - VIN yang valid diterjemahkan menjadi merek, model (untuk model populer di Indonesia), dan tahun, lalu dipakai sebagai nama mobil di Pengaturan.
-- **Hapus kode kerusakan** mengirim mode `04`: lampu Check Engine mati dan data kesiapan uji emisi ikut terhapus, tetapi kerusakannya belum tentu hilang. Kode yang dihapus dicatat ke riwayat `dtc_logs`.
+- **Jawaban 03 yang dipercaya.** Daftar kode dan status "sudah dipindai" hanya berubah oleh jawaban yang memuat header `43`. `NO DATA` berarti "tidak ada kode" hanya bila ECU terbukti hidup: di polling ada PID yang terjawab di siklus yang sama, di pemindaian `0902`, `01A6`, atau `0100` terjawab. Dengan kontak mati, adapter menjawab `NO DATA` untuk semua perintah, jadi aplikasi tetap menulis "belum dipindai", bukan "tidak ada masalah". Jawaban lain (`ERROR`, `?`, `CAN ERROR`, `SEARCHING` saja) tidak mengubah kode yang sudah terbaca. Hasil pemindaian membawa `activeDtcsRead` untuk membedakan "tidak ada kode" dari "belum terbaca".
+- **Hapus kode kerusakan** tidak percaya begitu saja pada jawaban mode `04`. Dalam satu antrean, aplikasi membaca `03`, mengirim `04`, menunggu 500 ms, lalu membaca `03` lagi:
+
+  ```mermaid
+  flowchart LR
+      B["03: kode sebelum"] --> C["04: hapus"] --> W["jeda 500 ms"] --> A["03: baca balik"]
+      A --> R{"Hasil baca balik"}
+      R -- "kosong" --> OK["Terhapus semua"]
+      R -- "sebagian hilang" --> PA["Sebagian"]
+      R -- "tidak ada yang hilang" --> RJ["Ditolak"]
+      R -- "tidak terjawab" --> F["Gagal: data tidak diubah"]
+  ```
+
+  Banyak mobil hanya mengizinkan hapus kode saat kontak ON dan mesin mati, sehingga hasil "ditolak" itu wajar. Hanya kode yang benar-benar hilang yang dicatat ke riwayat `dtc_logs`. Lampu Check Engine ikut mati dan data kesiapan uji emisi ikut terhapus, tetapi kerusakannya belum tentu hilang.
 - **Kamus kode** berisi kode umum dengan judul, kategori, tingkat bahaya, deskripsi berbahasa Indonesia, gejala, kemungkinan penyebab, dan rekomendasi. Kode yang tidak dikenal mendapat penjelasan umum berdasarkan hurufnya (P/C/B/U). Laporan pemindaian bisa disalin sebagai teks untuk dikirim ke bengkel.
 
 ## 6. Skor kesehatan
