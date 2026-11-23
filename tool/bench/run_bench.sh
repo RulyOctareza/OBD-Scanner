@@ -87,6 +87,9 @@ for i in $(seq 1 "$RUNS"); do
   sleep 5
   conditions > "$OUT/run$i-conditions.txt" || true
   adb logcat -c
+  # install -r keeps app data: a run that never starts must not hand back the
+  # previous run's results file.
+  adb shell run-as "$PKG" rm -f app_flutter/bench_results.jsonl > /dev/null 2>&1 || true
   start_sampler "$OUT/run$i-freq.txt"
   adb shell am start -W -n "$PKG/$ACTIVITY" > "$OUT/run$i-am-start.txt"
   started=$SECONDS

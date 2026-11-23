@@ -85,6 +85,8 @@ Future<void> main() async {
     'os': Platform.operatingSystemVersion,
     'cpus': Platform.numberOfProcessors,
     'mode': kProfileMode ? 'profile' : (kReleaseMode ? 'release' : 'debug'),
+    // Build stamp (tool/build_verified.sh): proves which build each result is.
+    'src_rev': const String.fromEnvironment('SRC_REV'),
     'main_to_first_frame_ms': firstFrameMs,
     'cached_fonts_deleted': cachedFonts.length,
     'seed_ms': seedClock.elapsedMilliseconds,
