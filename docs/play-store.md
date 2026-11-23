@@ -86,7 +86,7 @@ Terjemahan Inggris ditambahkan lewat *Manage translations → Add your own trans
 ### App access
 Pilih **All or some functionality is restricted**, lalu tambahkan instruksi (tanpa username/password):
 
-> No account or login is needed. Most features read data from a Bluetooth ELM327 OBD-II adapter plugged into a car. To review every screen without a car, turn on simulator mode: choose it on the first-run intro, or open the "Pengaturan" tab, section "Simulator". Its switches simulate an overheating engine, a weak battery and a Check Engine trouble code (P0138). Trouble-code scanning ("Diagnostik" tab, "Pindai") also works in simulator mode. Tabs: Beranda (health score), Live (gauges and sensors), Diagnostik (scan and code dictionary), Riwayat (trips, fuel, service), Pengaturan.
+> No account or login is needed. Most features read data from a Bluetooth ELM327 OBD-II adapter plugged into a car. To review every screen without a car, turn on simulator mode: tap "Coba dengan simulator" on the first screen, or open the "Pengaturan" tab, section "Simulator", switch "Mode simulator". Its switches simulate an overheating engine, a weak battery and a Check Engine trouble code (P0138). Trouble-code scanning ("Diagnostik" tab, "Pindai") also works in simulator mode. Tabs: Beranda (health score), Live (gauges and sensors), Diagnostik (scan and code dictionary), Riwayat (trips, fuel, service), Pengaturan.
 
 ### Ads
 **No, my app does not contain ads.**

@@ -96,12 +96,12 @@ Penjelasan lengkap dengan diagram (urutan koneksi, status dan koneksi ulang, pol
 
 ## 🚀 Mulai pakai
 
-1. Colokkan adapter ke port OBD-II, lalu nyalakan kontak mobil.
-2. Buka AutoCare, ikuti intro, dan izinkan akses **Perangkat di sekitar** (Bluetooth).
-3. Ketuk **Hubungkan** → cari → pilih adapter. PIN 1234 diisi otomatis.
+1. Colokkan adapter ke port OBD-II (biasanya di bawah dasbor dekat setir), lalu nyalakan kontak mobil.
+2. Buka AutoCare, pilih **Pakai adapter OBD**, lalu izinkan **Perangkat di sekitar**.
+3. Ketuk **Hubungkan**: lembar koneksi terbuka. Ketuk **Cari**, lalu pilih adapter. PIN 1234 diisi otomatis.
 4. Skor kesehatan di **Beranda** dan data di **Live** langsung terisi. Buka **Diagnostik → Pindai** untuk membaca kode kerusakan.
 
-Tidak punya adapter? Pilih mode simulator di intro, atau nyalakan di **Pengaturan → Simulator**.
+Tidak punya adapter? Pilih **Coba dengan simulator** di layar pertama, atau nyalakan di **Pengaturan → Simulator**.
 
 ## 🔒 Privasi
 

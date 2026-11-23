@@ -45,13 +45,17 @@ Tidak ada server, akun, atau sinkronisasi. Semua data tinggal di HP.
 
 ```mermaid
 flowchart TD
-    A["Buka aplikasi"] --> B["Splash<br/>tampil minimal 1,6 detik,<br/>menunggu pengaturan sampai 3,5 detik"]
+    A["Buka aplikasi"] --> B["Splash<br/>menunggu pengaturan dimuat,<br/>paling lama 3,5 detik"]
     B --> C{"Intro sudah<br/>pernah selesai?"}
-    C -- "Belum" --> D["Intro<br/>1. izin Bluetooth (Perangkat di sekitar)<br/>2. pilih adapter OBD atau mode simulator<br/>3. mulai"]
+    C -- "Belum" --> W["Selamat datang<br/>pilih cara mulai"]
+    W -- "Coba dengan simulator" --> E
+    W -- "Pakai adapter OBD" --> P["Langkah 1: izin Perangkat di sekitar<br/>(Lokasi hanya di Android 11 ke bawah)<br/>dan notifikasi, boleh ditolak"]
+    P --> Q["Langkah 2: pasang adapter<br/>colok, kontak ON, Hubungkan"]
+    Q --> S["Beranda membuka<br/>lembar koneksi adapter"]
     C -- "Sudah" --> E["Tab Beranda"]
-    D --> E
+    S --> E
     E --- T["Lima tab yang menyimpan posisinya:<br/>Beranda · Live · Diagnostik · Riwayat · Pengaturan"]
-    E --> S["Lembar koneksi adapter OBD<br/>(tombol Hubungkan atau Pengaturan → Koneksi)"]
+    E --> K["Lembar koneksi adapter OBD<br/>(tombol Hubungkan atau Pengaturan → Koneksi → Kelola)"]
 ```
 
 | Tab | Isi |
