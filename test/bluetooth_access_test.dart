@@ -37,5 +37,26 @@ void main() {
       expect(list.others.map((d) => d.address), [headset.address]);
       expect(list.readiness, BluetoothReadiness.ready);
     });
+
+    test('keeps an adapter Android reports as LE when it looks like OBD or was used last', () {
+      const leObd = BluetoothDevice(
+        name: 'Vgate iCar',
+        address: '00:00:00:00:00:05',
+        type: BluetoothDeviceType.le,
+      );
+      const leLastUsed = BluetoothDevice(
+        name: 'Car Link',
+        address: '00:00:00:00:00:06',
+        type: BluetoothDeviceType.le,
+      );
+
+      final list = ObdDeviceList.fromBonded(
+        [watch, leObd, leLastUsed],
+        lastUsedAddress: leLastUsed.address,
+      );
+
+      expect(list.likely.map((d) => d.address), [leLastUsed.address, leObd.address]);
+      expect(list.others, isEmpty);
+    });
   });
 }

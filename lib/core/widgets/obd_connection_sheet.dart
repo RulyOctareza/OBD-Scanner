@@ -62,9 +62,17 @@ class _ObdConnectionSheet extends ConsumerStatefulWidget {
 }
 
 class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
+  // Android 11 and older skip discovery without any error while Location is
+  // off: no result and no finish event ever arrive. The sheet checks shortly
+  // after starting that the platform really scans, and caps every scan.
+  static const _scanStartCheck = Duration(seconds: 3);
+  static const _scanLimit = Duration(seconds: 20);
+
   late final ObdService _obd;
+  late final BluetoothDiscovery _discovery;
 
   StreamSubscription<BluetoothDiscoveryResult>? _scanSub;
+  Timer? _scanWatchdog;
   bool _scanning = false;
   bool _scanFinished = false;
   String? _scanMessage;
@@ -76,6 +84,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
   void initState() {
     super.initState();
     _obd = ref.read(obdServiceProvider.notifier);
+    _discovery = ref.read(bluetoothDiscoveryProvider);
     _obd.holdAutoConnect();
   }
 
@@ -102,7 +111,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
       _found.clear();
     });
 
-    final readiness = await BluetoothAccess.check(forDiscovery: true);
+    final readiness = await _discovery.check();
     if (!mounted) return;
     if (readiness != BluetoothReadiness.ready) {
       setState(() => _scanBlockedBy = readiness);
@@ -110,14 +119,15 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
     }
 
     setState(() => _scanning = true);
-    _scanSub = BluetoothAccess.discover().listen(
+    _scanSub = _discovery.start().listen(
       (result) {
         final device = result.device;
-        if (device.isBonded || !isClassicCapable(device)) return;
+        if (device.isBonded || !isOfferableAdapter(device)) return;
         if (!mounted) return;
         setState(() => _found[device.address] = result);
       },
       onError: (Object e) {
+        _cancelScanWatchdog();
         if (!mounted) return;
         final noPermission = e is PlatformException && e.code == 'no_permissions';
         setState(() {
@@ -130,6 +140,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
         });
       },
       onDone: () {
+        _cancelScanWatchdog();
         if (!mounted) return;
         setState(() {
           _scanning = false;
@@ -137,19 +148,45 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
         });
       },
     );
+    _scanWatchdog = Timer(_scanStartCheck, _checkScanStarted);
   }
 
-  void _stopScan({bool updateUi = true}) {
+  Future<void> _checkScanStarted() async {
+    if (!mounted || !_scanning) return;
+    if (_found.isNotEmpty || await _discovery.isRunning()) {
+      if (!mounted || !_scanning) return;
+      _scanWatchdog = Timer(_scanLimit - _scanStartCheck, _stopScan);
+      return;
+    }
+    final locationOff = await _discovery.isLocationServiceOff();
+    if (!mounted || !_scanning) return;
+    _stopScan(
+      message: locationOff
+          ? 'Lokasi HP mati. Di Android 11 ke bawah, mencari adapter baru '
+                'butuh Lokasi. Nyalakan Lokasi, lalu ketuk Cari lagi.'
+          : 'Pencarian tidak dimulai oleh sistem. Matikan lalu nyalakan lagi '
+                'Bluetooth, lalu ketuk Cari lagi.',
+    );
+  }
+
+  void _cancelScanWatchdog() {
+    _scanWatchdog?.cancel();
+    _scanWatchdog = null;
+  }
+
+  void _stopScan({bool updateUi = true, String? message}) {
+    _cancelScanWatchdog();
     final sub = _scanSub;
     _scanSub = null;
     if (sub != null) {
       unawaited(sub.cancel());
-      unawaited(BluetoothAccess.stopDiscovery());
+      unawaited(_discovery.stop());
     }
     if (updateUi && mounted && _scanning) {
       setState(() {
         _scanning = false;
         _scanFinished = true;
+        _scanMessage = message;
       });
     }
   }
@@ -402,9 +439,18 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
         return b.rssi.compareTo(a.rssi);
       });
 
-    final blocked = _scanBlockedBy == null
+    // A "Bluetooth off" block left by an earlier Cari is stale once the bonded
+    // list, re-read after Bluetooth came on, reports ready.
+    final listReady =
+        ref.watch(obdDeviceListProvider).valueOrNull?.readiness ==
+        BluetoothReadiness.ready;
+    final blockedBy =
+        _scanBlockedBy == BluetoothReadiness.bluetoothOff && listReady
         ? null
-        : _readinessNotice(_scanBlockedBy!, onResolved: _startScan);
+        : _scanBlockedBy;
+    final blocked = blockedBy == null
+        ? null
+        : _readinessNotice(blockedBy, onResolved: _startScan);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

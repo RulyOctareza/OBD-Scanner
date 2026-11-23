@@ -41,10 +41,14 @@ bool isLikelyObdAdapter(String? name) {
   return _obdNameHints.any(lower.contains);
 }
 
-/// BLE-only devices cannot speak Bluetooth Classic SPP, so they are never
-/// offered as adapters.
-bool isClassicCapable(BluetoothDevice device) =>
-    device.type != BluetoothDeviceType.le;
+/// BLE-only devices cannot speak Bluetooth Classic SPP, so they are hidden.
+/// A device that looks like an OBD adapter, or is the last one used, always
+/// stays: Android sometimes reports a dual-mode device as LE, and hiding a
+/// real adapter would leave no way to connect to it.
+bool isOfferableAdapter(BluetoothDevice device, {String lastUsedAddress = ''}) =>
+    device.type != BluetoothDeviceType.le ||
+    device.address == lastUsedAddress ||
+    isLikelyObdAdapter(device.name);
 
 class ObdDeviceList {
   final BluetoothReadiness readiness;
@@ -74,7 +78,9 @@ class ObdDeviceList {
 
     final likely = <BluetoothDevice>[];
     final others = <BluetoothDevice>[];
-    for (final device in bonded.where(isClassicCapable)) {
+    for (final device in bonded.where(
+      (d) => isOfferableAdapter(d, lastUsedAddress: lastUsedAddress),
+    )) {
       if (device.address == lastUsedAddress || isLikelyObdAdapter(device.name)) {
         likely.add(device);
       } else {
@@ -145,10 +151,6 @@ class BluetoothAccess {
 
   static Future<void> openAppPermissionSettings() => openAppSettings();
 
-  /// Classic discovery; the platform ends it on its own after ~12 s.
-  static Stream<BluetoothDiscoveryResult> discover() =>
-      FlutterBluetoothSerial.instance.startDiscovery();
-
   static Future<void> stopDiscovery() async {
     try {
       await FlutterBluetoothSerial.instance.cancelDiscovery();
@@ -183,6 +185,47 @@ class BluetoothAccess {
     }
   }
 }
+
+/// Classic discovery as the connection sheet drives it. Behind a provider so
+/// widget tests can stand in for the radio: scans that hang, fail or find
+/// adapters.
+class BluetoothDiscovery {
+  const BluetoothDiscovery();
+
+  Future<BluetoothReadiness> check() =>
+      BluetoothAccess.check(forDiscovery: true);
+
+  /// The platform normally ends discovery on its own after ~12 s. On Android
+  /// 11 and older with Location off it never starts and the stream never
+  /// closes, so callers must not wait on it alone.
+  Stream<BluetoothDiscoveryResult> start() =>
+      FlutterBluetoothSerial.instance.startDiscovery();
+
+  Future<void> stop() => BluetoothAccess.stopDiscovery();
+
+  Future<bool> isRunning() async {
+    try {
+      return await FlutterBluetoothSerial.instance.isDiscovering == true;
+    } catch (e) {
+      debugPrint('Discovery state check failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> isLocationServiceOff() async {
+    try {
+      return await Permission.location.serviceStatus ==
+          ServiceStatus.disabled;
+    } catch (e) {
+      debugPrint('Location service check failed: $e');
+      return false;
+    }
+  }
+}
+
+final bluetoothDiscoveryProvider = Provider<BluetoothDiscovery>(
+  (ref) => const BluetoothDiscovery(),
+);
 
 /// Bonded devices for the connection sheet, with readiness resolved first so
 /// the sheet can show "turn on Bluetooth" / "grant permission" instead of an
