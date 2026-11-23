@@ -13,7 +13,7 @@ OUT=${1:?usage: tool/bench/run_bench.sh <out-dir> [--no-build]}
 RUNS=${RUNS:-3}
 PKG=com.autocare.autocare.bench
 ACTIVITY=com.autocare.autocare.MainActivity
-APK=build/app/outputs/flutter-apk/app-profile.apk
+APK=${APK:-build/app/outputs/flutter-apk/app-profile.apk}
 mkdir -p "$OUT"
 
 if [[ "${2:-}" != "--no-build" ]]; then

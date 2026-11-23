@@ -24,6 +24,13 @@ import 'perf_probe.dart';
 const benchTag = 'AUTOCARE_BENCH';
 
 const _window = Duration(seconds: 20);
+
+/// Comma-separated scenario names to run (--dart-define=BENCH_ONLY=...),
+/// for quick A/B builds; empty runs the full script.
+const _only = String.fromEnvironment('BENCH_ONLY');
+
+bool _wants(String scenario) =>
+    _only.isEmpty || _only.split(',').contains(scenario);
 const _settle = Duration(seconds: 3);
 
 /// Fixed scenario script. Every scenario settles, then measures one window.
@@ -78,14 +85,14 @@ class BenchRunner {
     final linkClock = Stopwatch()..start();
     final answersAtConnect = adapter.answers;
 
-    await _screen('meter_drive', '/dashboard');
-    await _screen('sensor_drive', '/live_data');
-    await _screen('health_drive', '/health');
-    await _chartModal();
-    await _tabSwitching();
-    await _timelineScroll();
+    if (_wants('meter_drive')) await _screen('meter_drive', '/dashboard');
+    if (_wants('sensor_drive')) await _screen('sensor_drive', '/live_data');
+    if (_wants('health_drive')) await _screen('health_drive', '/health');
+    if (_wants('chart_modal_rpm')) await _chartModal();
+    if (_wants('tab_switching')) await _tabSwitching();
+    if (_wants('timeline_scroll')) await _timelineScroll();
     adapter.profile = FakeEngineProfile.idle;
-    await _screen('meter_idle', '/dashboard');
+    if (_wants('meter_idle')) await _screen('meter_idle', '/dashboard');
 
     final seconds = linkClock.elapsedMilliseconds / 1000;
     // Ends with a user disconnect, so the host can check that the foreground
