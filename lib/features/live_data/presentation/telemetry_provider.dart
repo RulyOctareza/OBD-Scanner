@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' as drift;
@@ -48,14 +50,13 @@ class TelemetryHistoryData {
     this.isStable = false,
   });
 
-  factory TelemetryHistoryData.empty() => TelemetryHistoryData(
-        points: const [],
-        totalPointsCount: 0,
-      );
+  factory TelemetryHistoryData.empty() =>
+      TelemetryHistoryData(points: const [], totalPointsCount: 0);
 }
 
-final telemetryTimeRangeProvider =
-    StateProvider<TelemetryTimeRange>((ref) => TelemetryTimeRange.fiveMin);
+final telemetryTimeRangeProvider = StateProvider<TelemetryTimeRange>(
+  (ref) => TelemetryTimeRange.fiveMin,
+);
 
 /// Computes chart-friendly Y-axis bounds for a metric series.
 ({double minY, double maxY}) computeChartYBounds({
@@ -99,26 +100,29 @@ final telemetryTimeRangeProvider =
 /// with the chart together with the buffer and the stored series.
 final telemetryHistoryProvider = Provider.autoDispose
     .family<AsyncValue<TelemetryHistoryData>, ObdMetricType>((ref, metricType) {
-  final timeRange = ref.watch(telemetryTimeRangeProvider);
-  final storedAsync = ref.watch(storedSeriesProvider((metricType, timeRange)));
-  final liveBuffer = ref.watch(liveChartBufferProvider);
+      final timeRange = ref.watch(telemetryTimeRangeProvider);
+      final storedAsync = ref.watch(
+        storedSeriesProvider((metricType, timeRange)),
+      );
+      final liveBuffer = ref.watch(liveChartBufferProvider);
 
-  if (storedAsync.hasError) {
-    return AsyncValue.error(storedAsync.error!, storedAsync.stackTrace!);
-  }
-  final stored = storedAsync.valueOrNull;
-  // Live samples are shown while the stored series is still loading.
-  if (stored == null && liveBuffer.isEmpty) return const AsyncValue.loading();
-  return AsyncValue.data(
-    buildTelemetryHistory(
-      metricType: metricType,
-      timeRange: timeRange,
-      stored: stored ?? const [],
-      live: liveBuffer,
-      now: DateTime.now(),
-    ),
-  );
-});
+      if (storedAsync.hasError) {
+        return AsyncValue.error(storedAsync.error!, storedAsync.stackTrace!);
+      }
+      final stored = storedAsync.valueOrNull;
+      // Live samples are shown while the stored series is still loading.
+      if (stored == null && liveBuffer.isEmpty)
+        return const AsyncValue.loading();
+      return AsyncValue.data(
+        buildTelemetryHistory(
+          metricType: metricType,
+          timeRange: timeRange,
+          stored: stored ?? const [],
+          live: liveBuffer,
+          now: clock.now(),
+        ),
+      );
+    });
 
 /// The cleaning pipeline of the chart (book telemetry/chart_history):
 /// range filter, validity filter, merge by time, collapse samples closer than
@@ -131,8 +135,9 @@ TelemetryHistoryData buildTelemetryHistory({
   required List<TelemetryPointBundle> live,
   required DateTime now,
 }) {
-  final startTime =
-      timeRange.duration != null ? now.subtract(timeRange.duration!) : null;
+  final startTime = timeRange.duration != null
+      ? now.subtract(timeRange.duration!)
+      : null;
   bool inRange(DateTime t) => startTime == null || !t.isBefore(startTime);
 
   final fromStore = [
@@ -192,8 +197,11 @@ TelemetryHistoryData buildTelemetryHistory({
   final minV = values.reduce((a, b) => a < b ? a : b);
   final maxV = values.reduce((a, b) => a > b ? a : b);
   final avgV = values.reduce((a, b) => a + b) / values.length;
-  final currentV = fromLive.isNotEmpty ? fromLive.last.value : chartPoints.last.value;
-  final isStable = (maxV - minV).abs() < 0.0001 ||
+  final currentV = fromLive.isNotEmpty
+      ? fromLive.last.value
+      : chartPoints.last.value;
+  final isStable =
+      (maxV - minV).abs() < 0.0001 ||
       (maxV - minV) / ((maxV.abs() < 1 ? 1 : maxV.abs())) < 0.002;
 
   return TelemetryHistoryData(
@@ -216,51 +224,61 @@ const _allRangeBuckets = 400;
 /// so watching the table would repeat work on every insert.
 @visibleForTesting
 final storedSeriesProvider = FutureProvider.autoDispose
-    .family<List<TelemetryPoint>, (ObdMetricType, TelemetryTimeRange)>(
-        (ref, key) async {
-  final (metricType, timeRange) = key;
-  final db = ref.watch(databaseProvider);
-  final column = _tripPointColumn(db, metricType).name;
-  final duration = timeRange.duration;
+    .family<List<TelemetryPoint>, (ObdMetricType, TelemetryTimeRange)>((
+      ref,
+      key,
+    ) async {
+      final (metricType, timeRange) = key;
+      final db = ref.watch(databaseProvider);
+      final column = _tripPointColumn(db, metricType).name;
+      final duration = timeRange.duration;
 
-  final List<drift.QueryRow> rows;
-  if (duration != null) {
-    rows = await db.customSelect(
-      'SELECT timestamp AS t, $column AS v FROM trip_points '
-      'WHERE $column IS NOT NULL AND timestamp >= ? ORDER BY timestamp',
-      variables: [drift.Variable<DateTime>(DateTime.now().subtract(duration))],
-      readsFrom: {db.tripPoints},
-    ).get();
-  } else {
-    // "Semua" spans every trip ever recorded, so it is bucketed in SQL.
-    // Timestamps are unix seconds; with a bare column next to MAX(), SQLite
-    // returns that column from the newest row of each bucket.
-    final span = await db.customSelect(
-      'SELECT MIN(timestamp) AS a, MAX(timestamp) AS b FROM trip_points '
-      'WHERE $column IS NOT NULL',
-      readsFrom: {db.tripPoints},
-    ).getSingle();
-    final first = span.readNullable<int>('a');
-    final last = span.readNullable<int>('b');
-    if (first == null || last == null) return const [];
-    final bucket = math.max(1, ((last - first) / _allRangeBuckets).ceil());
-    rows = await db.customSelect(
-      'SELECT MAX(timestamp) AS t, $column AS v FROM trip_points '
-      'WHERE $column IS NOT NULL GROUP BY timestamp / ? ORDER BY t',
-      variables: [drift.Variable.withInt(bucket)],
-      readsFrom: {db.tripPoints},
-    ).get();
-  }
+      final List<drift.QueryRow> rows;
+      if (duration != null) {
+        rows = await db
+            .customSelect(
+              'SELECT timestamp AS t, $column AS v FROM trip_points '
+              'WHERE $column IS NOT NULL AND timestamp >= ? ORDER BY timestamp',
+              variables: [
+                drift.Variable<DateTime>(clock.now().subtract(duration)),
+              ],
+              readsFrom: {db.tripPoints},
+            )
+            .get();
+      } else {
+        // "Semua" spans every trip ever recorded, so it is bucketed in SQL.
+        // Timestamps are unix seconds; with a bare column next to MAX(), SQLite
+        // returns that column from the newest row of each bucket.
+        final span = await db
+            .customSelect(
+              'SELECT MIN(timestamp) AS a, MAX(timestamp) AS b FROM trip_points '
+              'WHERE $column IS NOT NULL',
+              readsFrom: {db.tripPoints},
+            )
+            .getSingle();
+        final first = span.readNullable<int>('a');
+        final last = span.readNullable<int>('b');
+        if (first == null || last == null) return const [];
+        final bucket = math.max(1, ((last - first) / _allRangeBuckets).ceil());
+        rows = await db
+            .customSelect(
+              'SELECT MAX(timestamp) AS t, $column AS v FROM trip_points '
+              'WHERE $column IS NOT NULL GROUP BY timestamp / ? ORDER BY t',
+              variables: [drift.Variable.withInt(bucket)],
+              readsFrom: {db.tripPoints},
+            )
+            .get();
+      }
 
-  return [
-    for (final row in rows)
-      if (isValidChartMetricValue(metricType.name, row.read<double>('v')))
-        TelemetryPoint(
-          timestamp: row.read<DateTime>('t'),
-          value: row.read<double>('v'),
-        ),
-  ];
-});
+      return [
+        for (final row in rows)
+          if (isValidChartMetricValue(metricType.name, row.read<double>('v')))
+            TelemetryPoint(
+              timestamp: row.read<DateTime>('t'),
+              value: row.read<double>('v'),
+            ),
+      ];
+    });
 
 drift.GeneratedColumn<double> _tripPointColumn(
   AppDatabase db,
