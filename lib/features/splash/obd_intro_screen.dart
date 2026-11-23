@@ -2,10 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../core/theme/app_theme.dart';
+
+import '../../core/ui/ui.dart';
 import '../settings/presentation/settings_provider.dart';
 
-/// First-run intro: permissions → connection mode → view health score.
+/// Set by the intro's adapter path: Beranda opens the connection sheet once
+/// when it first shows.
+final openConnectionSheetOnStartProvider = StateProvider<bool>((ref) => false);
+
+enum _Step { mode, permissions, plugIn }
+
+/// First run: choose adapter or simulator first; the adapter path asks only
+/// for what connecting needs, shows how to plug the adapter in and then
+/// opens the connection sheet. The simulator path asks for nothing.
 class ObdIntroScreen extends ConsumerStatefulWidget {
   const ObdIntroScreen({super.key});
 
@@ -14,275 +23,323 @@ class ObdIntroScreen extends ConsumerStatefulWidget {
 }
 
 class _ObdIntroScreenState extends ConsumerState<ObdIntroScreen> {
-  int _step = 0;
-  bool _requestingPermission = false;
+  _Step _step = _Step.mode;
+  bool _requesting = false;
+
+  Future<void> _useSimulator() async {
+    final settings = ref.read(settingsProvider.notifier);
+    await settings.setSimulatorMode(true);
+    await settings.setObdIntroCompleted(true);
+    if (!mounted) return;
+    context.go('/health');
+  }
 
   Future<void> _requestPermissions() async {
-    setState(() => _requestingPermission = true);
+    setState(() => _requesting = true);
     try {
+      // Nearby devices on Android 12+ (granted without a prompt on 11 and
+      // older). Location is declared only up to Android 11, where finding
+      // new adapters needs it; on 12+ the request ends without a dialog.
       await [
-        Permission.bluetooth,
         Permission.bluetoothConnect,
         Permission.bluetoothScan,
         Permission.locationWhenInUse,
       ].request();
+      // Optional: the connection service's notification on Android 13+.
+      await Permission.notification.request();
     } catch (_) {
-      // Best-effort; user can grant later in system settings.
+      // Best effort: the connection sheet asks again when it needs to.
     }
     if (!mounted) return;
     setState(() {
-      _requestingPermission = false;
-      _step = 1;
+      _requesting = false;
+      _step = _Step.plugIn;
     });
   }
 
-  Future<void> _finish() async {
-    await ref.read(settingsProvider.notifier).setObdIntroCompleted(true);
+  Future<void> _connect() async {
+    final settings = ref.read(settingsProvider.notifier);
+    await settings.setSimulatorMode(false);
+    await settings.setObdIntroCompleted(true);
+    ref.read(openConnectionSheetOnStartProvider.notifier).state = true;
     if (!mounted) return;
     context.go('/health');
   }
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(settingsProvider);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _finish,
-                  child: const Text('Lewati'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: List.generate(3, (i) {
-                  final active = i <= _step;
-                  return Expanded(
-                    child: Container(
-                      height: 4,
-                      margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
-                      decoration: BoxDecoration(
-                        color: active ? AppColors.primary : AppColors.card,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 32),
-              Expanded(child: _buildStep(settings)),
-            ],
+    final body = switch (_step) {
+      _Step.mode => _ModeStep(
+          onAdapter: () => setState(() => _step = _Step.permissions),
+          onSimulator: _useSimulator,
+        ),
+      _Step.permissions => _PermissionStep(
+          requesting: _requesting,
+          onGrant: _requestPermissions,
+          onSkip: () => setState(() => _step = _Step.plugIn),
+        ),
+      _Step.plugIn => _PlugInStep(onConnect: _connect),
+    };
+    return PopScope(
+      canPop: _step == _Step.mode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          setState(() => _step =
+              _step == _Step.plugIn ? _Step.permissions : _Step.mode);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
+              AppSpacing.xl,
+            ),
+            children: [body],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildStep(SettingsState settings) {
-    switch (_step) {
-      case 0:
-        return _IntroStep(
-          icon: Icons.security_rounded,
-          title: 'Izin Bluetooth & Lokasi',
-          body:
-              'AutoCare membutuhkan izin Bluetooth dan lokasi agar dapat menemukan adapter OBD-II ELM327 di mobil Anda.',
-          primaryLabel: _requestingPermission ? 'Meminta izin...' : 'Berikan Izin',
-          onPrimary: _requestingPermission ? null : _requestPermissions,
-        );
-      case 1:
-        return _IntroStep(
-          icon: Icons.cable_rounded,
-          title: 'Pilih Cara Koneksi',
-          body:
-              'Pakai adapter Bluetooth di mobil, atau coba Mode Simulator untuk melihat demo tanpa perangkat.',
-          primaryLabel: 'Lanjut',
-          onPrimary: () => setState(() => _step = 2),
-          extra: Column(
-            children: [
-              _ModeCard(
-                selected: !settings.isSimulatorMode,
-                icon: Icons.bluetooth_connected_rounded,
-                title: 'Adapter OBD-II',
-                subtitle: 'Hubungkan ELM327 fisik',
-                onTap: () {
-                  ref.read(settingsProvider.notifier).setSimulatorMode(false);
-                },
-              ),
-              const SizedBox(height: 12),
-              _ModeCard(
-                selected: settings.isSimulatorMode,
-                icon: Icons.science_rounded,
-                title: 'Mode Simulator',
-                subtitle: 'Demo sensor tanpa adapter',
-                accent: AppColors.warning,
-                onTap: () {
-                  ref.read(settingsProvider.notifier).setSimulatorMode(true);
-                },
-              ),
-            ],
-          ),
-        );
-      default:
-        return _IntroStep(
-          icon: Icons.favorite_rounded,
-          title: 'Lihat Skor Kesehatan',
-          body:
-              'Setelah terhubung, layar Kesehatan menampilkan skor mesin, peringatan, dan pintasan pindai diagnostik.',
-          primaryLabel: 'Mulai AutoCare',
-          onPrimary: _finish,
-        );
-    }
+class _StepHeader extends StatelessWidget {
+  const _StepHeader({required this.step, required this.title, required this.text});
+
+  final String? step;
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (step != null) ...[
+          Text(step!, style: theme.textTheme.labelMedium
+              ?.copyWith(color: theme.colorScheme.primary)),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        Semantics(
+          header: true,
+          child: Text(title, style: theme.textTheme.headlineSmall),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(text, style: theme.textTheme.bodyLarge
+            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        const SizedBox(height: AppSpacing.xl),
+      ],
+    );
   }
 }
 
-class _IntroStep extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-  final String primaryLabel;
-  final VoidCallback? onPrimary;
-  final Widget? extra;
+class _ModeStep extends StatelessWidget {
+  const _ModeStep({required this.onAdapter, required this.onSimulator});
 
-  const _IntroStep({
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.primaryLabel,
-    required this.onPrimary,
-    this.extra,
-  });
+  final VoidCallback onAdapter;
+  final VoidCallback onSimulator;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 48, color: AppColors.primary),
+        const _StepHeader(
+          step: null,
+          title: 'Selamat datang di AutoCare',
+          text: 'Pantau kondisi mobil dari HP lewat adapter OBD Bluetooth. '
+              'Mulai dengan cara yang Anda punya.',
         ),
-        const SizedBox(height: 24),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
+        _ModeCard(
+          icon: Icons.bluetooth_rounded,
+          title: 'Pakai adapter OBD',
+          text: 'Adapter ELM327 Bluetooth yang dicolok ke port OBD mobil.',
+          onTap: onAdapter,
         ),
-        const SizedBox(height: 12),
-        Text(
-          body,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 14,
-            height: 1.45,
-            color: AppColors.textSecondary,
-          ),
+        const SizedBox(height: AppSpacing.md),
+        _ModeCard(
+          icon: Icons.science_outlined,
+          title: 'Coba dengan simulator',
+          text: 'Lihat cara kerja aplikasi dengan data contoh, tanpa adapter. '
+              'Bisa dimatikan nanti di Pengaturan.',
+          onTap: onSimulator,
         ),
-        if (extra != null) ...[
-          const SizedBox(height: 24),
-          extra!,
-        ],
-        const Spacer(),
-        FilledButton(
-          onPressed: onPrimary,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Text(
-            primaryLabel,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-        ),
-        const SizedBox(height: 12),
       ],
     );
   }
 }
 
 class _ModeCard extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color accent;
-  final VoidCallback onTap;
-
   const _ModeCard({
-    required this.selected,
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.text,
     required this.onTap,
-    this.accent = AppColors.primary,
   });
+
+  final IconData icon;
+  final String title;
+  final String text;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final theme = Theme.of(context);
+    return AppCard(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? accent : Colors.white.withOpacity(0.08),
-            width: selected ? 1.5 : 1,
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: theme.colorScheme.onPrimaryContainer),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: selected ? accent : AppColors.textSecondary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.xs),
+                Text(text, style: theme.textTheme.bodyMedium),
+              ],
             ),
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: selected ? accent : AppColors.textSecondary,
-            ),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right_rounded),
+        ],
       ),
+    );
+  }
+}
+
+class _PermissionStep extends StatelessWidget {
+  const _PermissionStep({
+    required this.requesting,
+    required this.onGrant,
+    required this.onSkip,
+  });
+
+  final bool requesting;
+  final VoidCallback onGrant;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget item(IconData icon, String title, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: theme.colorScheme.primary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(text, style: theme.textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _StepHeader(
+          step: 'Langkah 1 dari 2',
+          title: 'Izin untuk adapter',
+          text: 'Android akan menanyakan izin ini sekali.',
+        ),
+        item(
+          Icons.bluetooth_searching_rounded,
+          'Perangkat di sekitar',
+          'Untuk menemukan dan menghubungkan adapter. Di Android 11 ke bawah, '
+              'Android menyebutnya izin Lokasi; AutoCare tidak melacak posisi '
+              'Anda.',
+        ),
+        item(
+          Icons.notifications_none_rounded,
+          'Notifikasi (boleh ditolak)',
+          'Menampilkan status koneksi saat aplikasi berjalan di latar.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        FilledButton(
+          onPressed: requesting ? null : onGrant,
+          child: Text(requesting ? 'Menunggu jawaban…' : 'Berikan izin'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextButton(onPressed: requesting ? null : onSkip, child: const Text('Nanti saja')),
+      ],
+    );
+  }
+}
+
+class _PlugInStep extends StatelessWidget {
+  const _PlugInStep({required this.onConnect});
+
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget step(int n, String title, String text) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Text('$n', style: theme.textTheme.labelLarge
+                    ?.copyWith(color: theme.colorScheme.onPrimaryContainer)),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 2),
+                    Text(text, style: theme.textTheme.bodyMedium),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _StepHeader(
+          step: 'Langkah 2 dari 2',
+          title: 'Pasang adapter',
+          text: 'Lakukan ini sekali di mobil, lalu hubungkan.',
+        ),
+        step(1, 'Colok adapter', 'Port OBD ada di bawah dasbor, biasanya dekat '
+            'setir atau pedal.'),
+        step(2, 'Kunci kontak ON', 'Mesin boleh mati atau hidup. Lampu adapter '
+            'menyala saat mendapat daya.'),
+        step(3, 'Hubungkan', 'Pilih adapter di daftar. Bila diminta PIN, coba '
+            '1234 atau 0000.'),
+        const SizedBox(height: AppSpacing.md),
+        FilledButton(onPressed: onConnect, child: const Text('Hubungkan adapter')),
+      ],
     );
   }
 }

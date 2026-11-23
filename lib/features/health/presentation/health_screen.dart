@@ -10,7 +10,9 @@ import '../../../core/obd/obd_metric.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/ui/ui.dart';
 import '../../../core/widgets/live_obd.dart';
+import '../../../core/widgets/obd_connection_sheet.dart';
 import '../../settings/presentation/settings_provider.dart';
+import '../../splash/obd_intro_screen.dart';
 import '../../shell/shell_screen.dart';
 import '../../timeline/presentation/timeline_screen.dart';
 import '../../trips/presentation/trip_provider.dart';
@@ -55,6 +57,17 @@ class HealthScreen extends ConsumerWidget {
     ) {
       if (previous != null && next > previous) HapticFeedback.mediumImpact();
     });
+
+    // The first-run adapter path ends here with the connection sheet open.
+    if (ref.read(openConnectionSheetOnStartProvider)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted || !ref.read(openConnectionSheetOnStartProvider)) {
+          return;
+        }
+        ref.read(openConnectionSheetOnStartProvider.notifier).state = false;
+        showObdConnectionSheet(context, ref);
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
