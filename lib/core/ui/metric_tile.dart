@@ -201,3 +201,161 @@ class LiveMetricTile extends StatelessWidget {
     );
   }
 }
+
+/// A metric as one list row: icon, label (and its technical name), value
+/// with unit on the right, status chip under the value for a problem. Lists
+/// show many metrics per screen, where tiles show four.
+class MetricRow extends StatelessWidget {
+  const MetricRow({
+    super.key,
+    required this.label,
+    this.detail,
+    required this.value,
+    this.unit,
+    this.icon,
+    this.assessment = const MetricAssessment(StatusLevel.ok),
+    this.onTap,
+  });
+
+  final String label;
+
+  /// Secondary line, e.g. the OBD name.
+  final String? detail;
+  final String? value;
+  final String? unit;
+  final IconData? icon;
+  final MetricAssessment assessment;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final status = AppStatusColors.of(context);
+    final level = assessment.level;
+    final hasData = level != StatusLevel.noData &&
+        level != StatusLevel.unsupported &&
+        value != null;
+    final problem = hasData && level.isProblem;
+    final valueText = level == StatusLevel.unsupported
+        ? StatusLevel.unsupported.label
+        : hasData
+            ? (unit == null ? value! : Fmt.unit(value!, unit!))
+            : Fmt.pending;
+    final valueColor = !hasData
+        ? status.noData
+        : problem
+            ? status.foreground(level)
+            : scheme.onSurface;
+
+    return Semantics(
+      container: true,
+      button: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      label: [
+        label,
+        if (hasData) valueText else (level == StatusLevel.unsupported
+            ? StatusLevel.unsupported.label
+            : StatusLevel.noData.label),
+        if (problem) assessment.note ?? level.label,
+      ].join(', '),
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 64),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 22, color: scheme.onSurfaceVariant),
+                  const SizedBox(width: AppSpacing.lg),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(label, style: theme.textTheme.bodyLarge),
+                      if (detail != null)
+                        Text(detail!, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      valueText,
+                      style: level == StatusLevel.unsupported
+                          ? theme.textTheme.bodyMedium
+                              ?.copyWith(color: status.noData)
+                          : AppTheme.numberStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: valueColor,
+                            ),
+                    ),
+                    if (problem) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      StatusChip(level, label: assessment.note),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [MetricRow] for a live metric, rebuilding only on its displayed value.
+class LiveMetricRow extends StatelessWidget {
+  const LiveMetricRow(this.type, {super.key, this.onTap});
+
+  final ObdMetricType type;
+  final VoidCallback? onTap;
+
+  Widget _row(MetricReading reading, {bool engineRunning = false}) {
+    final config = ObdMetricConfig.of(type);
+    return MetricRow(
+      label: config.label,
+      detail: MetricDisplay.technicalName(type),
+      value: reading.hasValue ? MetricDisplay.value(type, reading.value!) : null,
+      unit: config.unit,
+      icon: MetricDisplay.icon(type),
+      assessment: assessReading(type, reading, engineRunning: engineRunning),
+      onTap: onTap,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final step = MetricDisplay.step(type);
+    // Own layer: rows sit in one card, and a changing value should not
+    // re-record its neighbours.
+    return RepaintBoundary(
+      child: assessmentNeedsRpm(type)
+          ? ObdSelect<(MetricReading, bool)>(
+              selector: (s) => (
+                readingOf(s, type, step: step),
+                isEngineRunning(s.telemetry.rpm),
+              ),
+              builder: (context, v, _) => _row(v.$1, engineRunning: v.$2),
+            )
+          : LiveMetric(
+              type: type,
+              step: step,
+              builder: (context, reading, _) => _row(reading),
+            ),
+    );
+  }
+}

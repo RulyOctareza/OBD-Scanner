@@ -28,6 +28,9 @@ abstract final class MetricThresholds {
   /// Idle outside this band (vehicle stopped, engine running) is unstable.
   static const double idleMinRpm = 650;
   static const double idleMaxRpm = 1100;
+
+  /// Start of the rev limit band on the RPM gauge (small petrol engines).
+  static const double rpmRedline = 6000;
 }
 
 bool isEngineRunning(double rpm) => rpm > MetricThresholds.engineRunningRpm;
@@ -122,3 +125,34 @@ MetricAssessment assessReading(
 
 /// Metrics whose judgement depends on whether the engine runs.
 bool assessmentNeedsRpm(ObdMetricType type) => type == ObdMetricType.voltage;
+
+/// A band of a gauge scale and the level it stands for.
+typedef GaugeZoneSpec = ({double from, double to, StatusLevel level});
+
+/// Bands marked on a metric's gauge, from the same thresholds that judge its
+/// value, so the dial and the readout agree. Voltage has none: whether a
+/// voltage is low depends on the engine running, which the scale cannot show.
+List<GaugeZoneSpec> gaugeZoneSpec(ObdMetricType type, {required double max}) {
+  return switch (type) {
+    ObdMetricType.rpm => [
+        (from: MetricThresholds.rpmRedline, to: max, level: StatusLevel.waspada),
+      ],
+    ObdMetricType.coolant => [
+        (
+          from: MetricThresholds.coolantWarm,
+          to: MetricThresholds.coolantCritical,
+          level: StatusLevel.waspada,
+        ),
+        (from: MetricThresholds.coolantCritical, to: max, level: StatusLevel.kritis),
+      ],
+    ObdMetricType.fuel => [
+        (from: 0, to: MetricThresholds.fuelReservePercent, level: StatusLevel.kritis),
+        (
+          from: MetricThresholds.fuelReservePercent,
+          to: MetricThresholds.fuelLowPercent,
+          level: StatusLevel.waspada,
+        ),
+      ],
+    _ => const [],
+  };
+}

@@ -1,107 +1,121 @@
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show ValueListenable;
+
+import 'package:flutter/foundation.dart' show ValueListenable, listEquals;
 import 'package:flutter/material.dart';
 
-// The gauge is painted in two layers. The track (ring, background arc, unlit
-// segments, ticks) depends only on the metric and is cached in its own layer.
-// The value layer (lit segments, pointer) repaints from the animation without
-// rebuilding any widget. Lit segments are opaque, so painting them over the
-// unlit ones gives the same pixels as painting either alone.
+// The gauge is painted in two layers. The track (background arc, zone bands,
+// ticks) depends only on the metric and is cached in its own layer. The value
+// layer is one arc that repaints from the animation without rebuilding any
+// widget; it allocates nothing per frame.
 
-const double _startAngle = 140.0 * (math.pi / 180);
-const double _sweepAngle = 260.0 * (math.pi / 180);
-const int _segmentsCount = 40;
-const double _segmentGap = 0.03; // radians
-const Color gaugeWarningColor = Color(0xFFFF3366);
+const double _startAngle = 135.0 * (math.pi / 180);
+const double _sweepAngle = 270.0 * (math.pi / 180);
+const double _strokeWidth = 10;
+const double _zoneWidth = 3;
+const double _zoneGap = 4;
+const int _tickCount = 10;
 
-double _radius(Size size) => math.min(size.width / 2, size.height / 2) - 12;
+double _radius(Size size) =>
+    math.min(size.width, size.height) / 2 - _strokeWidth / 2 - _zoneGap - _zoneWidth;
+
+/// A band of the scale drawn in a status colour, e.g. the coolant range above
+/// 100 °C. The value arc takes the colour of the band it ends in.
+@immutable
+class GaugeZone {
+  const GaugeZone(this.from, this.to, this.color);
+
+  final double from;
+  final double to;
+  final Color color;
+
+  bool contains(double value) => value >= from && value <= to;
+
+  @override
+  bool operator ==(Object other) =>
+      other is GaugeZone &&
+      other.from == from &&
+      other.to == to &&
+      other.color == color;
+
+  @override
+  int get hashCode => Object.hash(from, to, color);
+}
+
+double _fraction(double value, double minValue, double maxValue) {
+  final span = maxValue - minValue;
+  if (span <= 0) return 0;
+  return ((value.clamp(minValue, maxValue) - minValue) / span).toDouble();
+}
 
 class GaugeTrackPainter extends CustomPainter {
   const GaugeTrackPainter({
     required this.minValue,
     required this.maxValue,
-    required this.activeColor,
-    required this.backgroundColor,
-    required this.warningThreshold,
+    required this.trackColor,
+    required this.tickColor,
+    required this.zones,
   });
 
   final double minValue;
   final double maxValue;
-  final Color activeColor;
-  final Color backgroundColor;
-  final double warningThreshold;
+  final Color trackColor;
+  final Color tickColor;
+  final List<GaugeZone> zones;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
+    final center = size.center(Offset.zero);
     final radius = _radius(size);
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Outer thin ring.
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius + 6),
+      rect,
       _startAngle,
       _sweepAngle,
       false,
       Paint()
-        ..color = activeColor.withOpacity(0.15)
+        ..color = trackColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+        ..strokeWidth = _strokeWidth
+        ..strokeCap = StrokeCap.round,
     );
 
-    // Background arc.
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      _startAngle,
-      _sweepAngle,
-      false,
-      Paint()
-        ..color = backgroundColor.withOpacity(0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 12,
-    );
-
-    // Unlit segments.
-    final segmentPaint = Paint()
+    // Zone bands just outside the track.
+    final zonePaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.square
-      ..color = backgroundColor.withOpacity(0.08);
-    const segmentAngle = _sweepAngle / _segmentsCount;
-    for (int i = 0; i < _segmentsCount; i++) {
+      ..strokeWidth = _zoneWidth
+      ..strokeCap = StrokeCap.butt;
+    final zoneRect = Rect.fromCircle(
+      center: center,
+      radius: radius + _strokeWidth / 2 + _zoneGap + _zoneWidth / 2,
+    );
+    for (final zone in zones) {
+      final from = _fraction(zone.from, minValue, maxValue);
+      final to = _fraction(zone.to, minValue, maxValue);
+      if (to <= from) continue;
+      zonePaint.color = zone.color;
       canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        _startAngle + i * segmentAngle,
-        segmentAngle - _segmentGap,
+        zoneRect,
+        _startAngle + _sweepAngle * from,
+        _sweepAngle * (to - from),
         false,
-        segmentPaint,
+        zonePaint,
       );
     }
 
-    // Ticks.
+    // Ticks every tenth of the scale, inside the track; a small dial keeps
+    // the room for its readout.
+    if (radius < 64) return;
     final tickPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    const tickCount = 10;
-    for (int i = 0; i <= tickCount; i++) {
-      final angle = _startAngle + (_sweepAngle * (i / tickCount));
-      final innerRadius = radius - 18;
-      final outerRadius = radius - 12;
-      final isTickWarning =
-          (minValue + (i / tickCount) * (maxValue - minValue)) >= warningThreshold;
-      tickPaint.color = isTickWarning
-          ? gaugeWarningColor.withOpacity(0.6)
-          : activeColor.withOpacity(0.4);
-      canvas.drawLine(
-        Offset(
-          center.dx + innerRadius * math.cos(angle),
-          center.dy + innerRadius * math.sin(angle),
-        ),
-        Offset(
-          center.dx + outerRadius * math.cos(angle),
-          center.dy + outerRadius * math.sin(angle),
-        ),
-        tickPaint,
-      );
+      ..color = tickColor
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+    final outer = radius - _strokeWidth / 2 - 4;
+    for (var i = 0; i <= _tickCount; i++) {
+      final angle = _startAngle + _sweepAngle * (i / _tickCount);
+      final inner = outer - (i % 5 == 0 ? 8 : 4);
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      canvas.drawLine(center + direction * inner, center + direction * outer, tickPaint);
     }
   }
 
@@ -109,9 +123,9 @@ class GaugeTrackPainter extends CustomPainter {
   bool shouldRepaint(covariant GaugeTrackPainter old) =>
       old.minValue != minValue ||
       old.maxValue != maxValue ||
-      old.activeColor != activeColor ||
-      old.backgroundColor != backgroundColor ||
-      old.warningThreshold != warningThreshold;
+      old.trackColor != trackColor ||
+      old.tickColor != tickColor ||
+      !listEquals(old.zones, zones);
 }
 
 class GaugeValuePainter extends CustomPainter {
@@ -119,68 +133,43 @@ class GaugeValuePainter extends CustomPainter {
     required this.value,
     required this.minValue,
     required this.maxValue,
-    required this.activeColor,
-    required this.warningThreshold,
+    required this.color,
+    required this.zones,
   }) : super(repaint: value);
 
   /// Displayed value; every change repaints this layer only.
   final ValueListenable<double> value;
   final double minValue;
   final double maxValue;
-  final Color activeColor;
-  final double warningThreshold;
+  final Color color;
+  final List<GaugeZone> zones;
+
+  // Built once per size: paint() runs every animation frame.
+  final Paint _paint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _strokeWidth
+    ..strokeCap = StrokeCap.round;
+  Size? _size;
+  Rect _rect = Rect.zero;
+
+  Color _colorFor(double v) {
+    for (final zone in zones) {
+      if (zone.contains(v)) return zone.color;
+    }
+    return color;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = _radius(size);
-
-    final clampedValue = value.value.clamp(minValue, maxValue);
-    final valuePercentage = (clampedValue - minValue) / (maxValue - minValue);
-    final activeSweepAngle = _sweepAngle * valuePercentage;
-    final currentActiveColor =
-        clampedValue >= warningThreshold ? gaugeWarningColor : activeColor;
-
-    // Lit segments.
-    final activeSegmentsCount = (valuePercentage * _segmentsCount).floor();
-    final segmentPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.square;
-    const segmentAngle = _sweepAngle / _segmentsCount;
-    for (int i = 0; i < activeSegmentsCount; i++) {
-      final segmentValue = minValue + (i / _segmentsCount) * (maxValue - minValue);
-      segmentPaint.color =
-          segmentValue >= warningThreshold ? gaugeWarningColor : activeColor;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        _startAngle + i * segmentAngle,
-        segmentAngle - _segmentGap,
-        false,
-        segmentPaint,
-      );
+    if (_size != size) {
+      _size = size;
+      _rect = Rect.fromCircle(center: size.center(Offset.zero), radius: _radius(size));
     }
-
-    // Pointer with glow.
-    if (activeSweepAngle > 0) {
-      final pointerAngle = _startAngle + activeSweepAngle;
-      final pointerPos = Offset(
-        center.dx + radius * math.cos(pointerAngle),
-        center.dy + radius * math.sin(pointerAngle),
-      );
-      canvas.drawCircle(
-        pointerPos,
-        8,
-        Paint()..color = currentActiveColor.withOpacity(0.5),
-      );
-      canvas.drawCircle(
-        pointerPos,
-        4,
-        Paint()
-          ..color = currentActiveColor
-          ..style = PaintingStyle.fill,
-      );
-    }
+    final v = value.value;
+    final fraction = _fraction(v, minValue, maxValue);
+    if (fraction <= 0) return;
+    _paint.color = _colorFor(v);
+    canvas.drawArc(_rect, _startAngle, _sweepAngle * fraction, false, _paint);
   }
 
   @override
@@ -188,8 +177,8 @@ class GaugeValuePainter extends CustomPainter {
       old.value != value ||
       old.minValue != minValue ||
       old.maxValue != maxValue ||
-      old.activeColor != activeColor ||
-      old.warningThreshold != warningThreshold;
+      old.color != color ||
+      !listEquals(old.zones, zones);
 }
 
 /// The dial of a gauge: a cached track layer under a value layer that follows
@@ -202,17 +191,21 @@ class GaugeDial extends StatelessWidget {
     required this.minValue,
     required this.maxValue,
     required this.color,
-    required this.backgroundColor,
-    required this.warningThreshold,
+    required this.trackColor,
+    required this.tickColor,
+    this.zones = const [],
   });
 
   final ValueListenable<double> value;
   final double size;
   final double minValue;
   final double maxValue;
+
+  /// Colour of the value arc outside any zone.
   final Color color;
-  final Color backgroundColor;
-  final double warningThreshold;
+  final Color trackColor;
+  final Color tickColor;
+  final List<GaugeZone> zones;
 
   @override
   Widget build(BuildContext context) {
@@ -225,9 +218,9 @@ class GaugeDial extends StatelessWidget {
             painter: GaugeTrackPainter(
               minValue: minValue,
               maxValue: maxValue,
-              activeColor: color,
-              backgroundColor: backgroundColor,
-              warningThreshold: warningThreshold,
+              trackColor: trackColor,
+              tickColor: tickColor,
+              zones: zones,
             ),
           ),
         ),
@@ -238,8 +231,8 @@ class GaugeDial extends StatelessWidget {
               value: value,
               minValue: minValue,
               maxValue: maxValue,
-              activeColor: color,
-              warningThreshold: warningThreshold,
+              color: color,
+              zones: zones,
             ),
           ),
         ),

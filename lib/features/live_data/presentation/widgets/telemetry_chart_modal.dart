@@ -1,12 +1,24 @@
+import 'dart:math' as math;
+
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import '../../../../core/theme/app_theme.dart';
+
 import '../../../../core/bluetooth/obd_service.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/ui/ui.dart';
 import '../telemetry_provider.dart';
 import 'gauge_widget.dart';
 
+String _rangeLabel(TelemetryTimeRange range) => switch (range) {
+      TelemetryTimeRange.oneMin => '1 mnt',
+      TelemetryTimeRange.fiveMin => '5 mnt',
+      TelemetryTimeRange.fifteenMin => '15 mnt',
+      TelemetryTimeRange.oneHour => '1 jam',
+      TelemetryTimeRange.all => 'Semua',
+    };
+
+/// The history of one metric as a sheet: range, line chart and statistics.
 class TelemetryChartModal extends ConsumerWidget {
   final ObdMetricType metricType;
 
@@ -15,272 +27,159 @@ class TelemetryChartModal extends ConsumerWidget {
     required this.metricType,
   });
 
+  /// Opens on the root navigator, above the navigation bar. The dev
+  /// benchmark calls this and closes the sheet through its own navigator.
   static void show(BuildContext context, ObdMetricType metricType) {
-    showModalBottomSheet(
+    showAppSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (context) => TelemetryChartModal(metricType: metricType),
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final config = ObdMetricConfig.of(metricType);
     final historyAsync = ref.watch(telemetryHistoryProvider(metricType));
     final selectedRange = ref.watch(telemetryTimeRangeProvider);
     final isConnected = ref.watch(
       obdServiceProvider.select((s) => s.status == ObdStatus.connected),
     );
+    final technical = MetricDisplay.technicalName(metricType);
 
-    final isVoltageOrFuelEco =
-        metricType == ObdMetricType.voltage ||
-        metricType == ObdMetricType.fuelEconomy;
-
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.82,
-      decoration: BoxDecoration(
-        color: AppColors.background.withOpacity(0.96),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border.all(color: config.color.withOpacity(0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: config.color.withOpacity(0.15),
-            blurRadius: 24,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.8,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 8),
-            width: 48,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-
-          // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              0,
+              AppSpacing.xl,
+              AppSpacing.md,
+            ),
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: config.color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: config.color.withOpacity(0.4),
-                      width: 1,
-                    ),
+                    color: scheme.surfaceContainerHighest,
+                    shape: BoxShape.circle,
                   ),
-                  child: Icon(_getMetricIcon(metricType), color: config.color, size: 22),
+                  child: Icon(
+                    MetricDisplay.icon(metricType),
+                    size: 22,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              config.label.toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2,
-                                color: AppColors.textPrimary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (isConnected)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF33FF33).withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFF33FF33), width: 1),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  CircleAvatar(
-                                    radius: 3,
-                                    backgroundColor: Color(0xFF33FF33),
-                                  ),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'LIVE',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF33FF33),
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
+                      Semantics(
+                        header: true,
+                        child: Text(config.label, style: theme.textTheme.titleLarge),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Grafik Historis Telemetri (${config.unit})',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
+                      if (technical != null)
+                        Text(technical, style: theme.textTheme.bodySmall),
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white54),
-                ),
+                if (isConnected)
+                  const StatusChip(StatusLevel.ok, label: 'Live'),
               ],
             ),
           ),
-
-          const Divider(color: Colors.white10, height: 1),
-
-          // Time Filter Bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: TelemetryTimeRange.values.map((range) {
-                  final isSelected = range == selectedRange;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text(
-                        range.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? Colors.white : AppColors.textSecondary,
-                        ),
-                      ),
-                      selected: isSelected,
-                      selectedColor: config.color.withOpacity(0.8),
-                      backgroundColor: AppColors.surface,
-                      side: BorderSide(
-                        color: isSelected ? config.color : Colors.white12,
-                        width: 1,
-                      ),
-                      onSelected: (val) {
-                        if (val) {
-                          ref.read(telemetryTimeRangeProvider.notifier).state = range;
-                        }
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                for (final range in TelemetryTimeRange.values)
+                  ChoiceChip(
+                    label: Text(_rangeLabel(range)),
+                    selected: range == selectedRange,
+                    onSelected: (_) => ref
+                        .read(telemetryTimeRangeProvider.notifier)
+                        .state = range,
+                  ),
+              ],
             ),
           ),
-
-          // Content body
+          const SizedBox(height: AppSpacing.lg),
           Expanded(
             child: historyAsync.when(
-              skipLoadingOnRefresh: true,
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+              // Stored trip points still loading and no live samples yet.
+              loading: () => Center(
+                child: Text('Memuat data grafik…', style: theme.textTheme.bodyMedium),
               ),
-              error: (err, stack) => Center(
-                child: Text(
-                  'Gagal memuat data: $err',
-                  style: const TextStyle(color: AppColors.danger),
-                ),
+              error: (e, _) => EmptyState(
+                compact: true,
+                icon: Icons.error_outline_rounded,
+                title: 'Grafik gagal dimuat',
+                message: 'Tutup lalu buka lagi grafiknya.',
               ),
               data: (data) {
                 if (data.points.isEmpty) {
-                  return _buildEmptyState(config);
+                  return SingleChildScrollView(
+                    child: EmptyState(
+                      compact: true,
+                      icon: Icons.show_chart_rounded,
+                      title: 'Belum ada data grafik',
+                      message: isConnected
+                          ? 'Grafik terisi beberapa detik setelah nilai '
+                              'pertama masuk.'
+                          : 'Hubungkan adapter untuk merekam data. Grafik '
+                              'juga memakai perjalanan yang sudah terekam.',
+                    ),
+                  );
                 }
-
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Main Chart View
+                    if (data.isStable)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.xl,
+                          0,
+                          AppSpacing.xl,
+                          AppSpacing.sm,
+                        ),
+                        child: Text(
+                          'Nilainya stabil pada rentang ini.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 24, 8),
-                        child: _buildLineChart(
-                          data.points,
-                          config,
-                          isVoltageOrFuelEco,
-                          isStable: data.isStable,
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.md,
+                          0,
+                          AppSpacing.xl,
+                          0,
+                        ),
+                        child: _Chart(
+                          points: data.points,
+                          config: config,
+                          lineColor: scheme.primary,
+                          gridColor: scheme.outlineVariant,
+                          range: selectedRange,
                         ),
                       ),
                     ),
-
-                    // KPI Stats Cards
                     Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildKpiCard(
-                                  title: 'SAAT INI',
-                                  value: data.currentValue != null
-                                      ? '${data.currentValue!.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}'
-                                      : '--',
-                                  icon: Icons.speed_rounded,
-                                  accentColor: config.color,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildKpiCard(
-                                  title: 'PUNCAK',
-                                  value: data.maxValue != null
-                                      ? '${data.maxValue!.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}'
-                                      : '--',
-                                  icon: Icons.north_east_rounded,
-                                  accentColor: Colors.orangeAccent,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildKpiCard(
-                                  title: 'TERENDAH',
-                                  value: data.minValue != null
-                                      ? '${data.minValue!.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}'
-                                      : '--',
-                                  icon: Icons.south_east_rounded,
-                                  accentColor: Colors.blueAccent,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: _buildKpiCard(
-                                  title: 'RATA-RATA',
-                                  value: data.avgValue != null
-                                      ? '${data.avgValue!.toStringAsFixed(isVoltageOrFuelEco ? 1 : 0)} ${config.unit}'
-                                      : '--',
-                                  icon: Icons.functions_rounded,
-                                  accentColor: Colors.purpleAccent,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        AppSpacing.lg,
+                        AppSpacing.xl,
+                        AppSpacing.xl,
                       ),
+                      child: _Stats(data: data, type: metricType),
                     ),
                   ],
                 );
@@ -291,298 +190,186 @@ class TelemetryChartModal extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildEmptyState(ObdMetricConfig config) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.show_chart_rounded,
-              size: 54,
-              color: config.color.withOpacity(0.3),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Merekam Telemetri...',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Data sampel lokal sedang dikumpulkan secara realtime dari koneksi OBD atau Simulator.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+class _Chart extends StatelessWidget {
+  const _Chart({
+    required this.points,
+    required this.config,
+    required this.lineColor,
+    required this.gridColor,
+    required this.range,
+  });
+
+  final List<TelemetryPoint> points;
+  final ObdMetricConfig config;
+  final Color lineColor;
+  final Color gridColor;
+  final TelemetryTimeRange range;
+
+  String _timeLabel(DateTime time, Duration span) {
+    if (span > const Duration(days: 1)) return Fmt.date(time);
+    if (span > const Duration(minutes: 15)) return Fmt.time(time);
+    return Fmt.timeWithSeconds(time);
   }
 
-  Widget _buildLineChart(
-    List<TelemetryPoint> points,
-    ObdMetricConfig config,
-    bool isPrecisionDecimal, {
-    bool isStable = false,
-  }) {
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme.bodySmall;
     final firstTime = points.first.timestamp;
-    final List<FlSpot> spots = [];
-    double lastX = -1.0;
-
+    final span = points.last.timestamp.difference(firstTime);
+    final spots = <FlSpot>[];
+    var lastX = -1.0;
     for (final p in points) {
-      double xSecs = p.timestamp.difference(firstTime).inMilliseconds / 1000.0;
-      if (xSecs <= lastX) {
-        xSecs = lastX + 0.05;
-      }
-      spots.add(FlSpot(xSecs, p.value));
-      lastX = xSecs;
+      var x = p.timestamp.difference(firstTime).inMilliseconds / 1000.0;
+      if (x <= lastX) x = lastX + 0.05;
+      spots.add(FlSpot(x, p.value));
+      lastX = x;
     }
 
-    final minYRaw = points.map((p) => p.value).reduce((a, b) => a < b ? a : b);
-    final maxYRaw = points.map((p) => p.value).reduce((a, b) => a > b ? a : b);
+    var minY = points.first.value;
+    var maxY = points.first.value;
+    for (final p in points) {
+      if (p.value < minY) minY = p.value;
+      if (p.value > maxY) maxY = p.value;
+    }
     final bounds = computeChartYBounds(
-      minValue: minYRaw,
-      maxValue: maxYRaw,
+      minValue: minY,
+      maxValue: maxY,
       metricMin: config.minValue,
       metricMax: config.maxValue,
     );
-    final finalMinY = bounds.minY;
-    final finalMaxY = bounds.maxY;
+    // Round the scale out to a readable step (1, 2, 2,5 or 5 times a power
+    // of ten), so grid labels read 40 · 50 · 60 rather than 44 · 53 · 62.
+    final yInterval = _niceStep((bounds.maxY - bounds.minY) / 4);
+    final chartMinY = (bounds.minY / yInterval).floorToDouble() * yInterval;
+    final chartMaxY = (bounds.maxY / yInterval).ceilToDouble() * yInterval;
+    final decimals = yInterval < 1 ? 1 : 0;
 
-    final timeFormat = DateFormat('HH:mm:ss');
-    final yInterval = ((finalMaxY - finalMinY) / 4).clamp(0.1, double.infinity);
-
-    return Column(
-      children: [
-        if (isStable)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Nilai relatif stabil — grafik akan bergerak saat sensor berubah.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: config.color.withOpacity(0.85),
-              ),
+    return LineChart(
+      // Updates arrive once a second; a tween would animate every one of them.
+      duration: Duration.zero,
+      LineChartData(
+        minY: chartMinY,
+        maxY: chartMaxY,
+        lineTouchData: const LineTouchData(enabled: false),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: yInterval,
+          getDrawingHorizontalLine: (_) =>
+              FlLine(color: gridColor, strokeWidth: 1),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 28,
+              interval: (spots.last.x / 2).clamp(1.0, double.infinity),
+              getTitlesWidget: (value, meta) {
+                // The last label would be centred on the right edge and cut.
+                if (value < 0 || value == meta.max) return const SizedBox.shrink();
+                final time =
+                    firstTime.add(Duration(milliseconds: (value * 1000).toInt()));
+                return Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Text(_timeLabel(time, span), style: text),
+                );
+              },
             ),
           ),
-        Expanded(
-          child: LineChart(
-            LineChartData(
-              minY: finalMinY,
-              maxY: finalMaxY,
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: true,
-                horizontalInterval: yInterval,
-                getDrawingHorizontalLine: (val) => FlLine(
-                  color: Colors.white.withOpacity(0.06),
-                  strokeWidth: 1,
-                ),
-                getDrawingVerticalLine: (val) => FlLine(
-                  color: Colors.white.withOpacity(0.04),
-                  strokeWidth: 1,
-                ),
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 28,
-                    interval: (spots.last.x / 3).clamp(1.0, double.infinity),
-                    getTitlesWidget: (value, meta) {
-                      if (value < 0 || spots.isEmpty) return const SizedBox.shrink();
-                      final targetTime = firstTime.add(
-                        Duration(milliseconds: (value * 1000).toInt()),
-                      );
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
-                        child: Text(
-                          timeFormat.format(targetTime),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textSecondary,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 42,
-                    interval: yInterval,
-                    getTitlesWidget: (value, meta) {
-                      return Text(
-                        value.toStringAsFixed(isPrecisionDecimal ? 1 : 0),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                          fontFamily: 'monospace',
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              borderData: FlBorderData(
-                show: true,
-                border: Border.all(color: Colors.white10, width: 1),
-              ),
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipColor: (spot) => AppColors.surface.withOpacity(0.9),
-                  tooltipBorder: BorderSide(color: config.color, width: 1),
-                  getTooltipItems: (touchedSpots) {
-                    return touchedSpots.map((spot) {
-                      final targetTime = firstTime.add(
-                        Duration(milliseconds: (spot.x * 1000).toInt()),
-                      );
-                      final valStr = spot.y.toStringAsFixed(
-                        isPrecisionDecimal ? 1 : 0,
-                      );
-                      return LineTooltipItem(
-                        '${timeFormat.format(targetTime)}\n$valStr ${config.unit}',
-                        TextStyle(
-                          color: config.color,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: 0.25,
-                  preventCurveOverShooting: true,
-                  color: config.color,
-                  barWidth: 2.5,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(
-                    show: spots.length < 40,
-                    getDotPainter: (spot, percent, bar, index) =>
-                        FlDotCirclePainter(
-                      radius: 3,
-                      color: config.color,
-                      strokeWidth: 1.5,
-                      strokeColor: Colors.black,
-                    ),
-                  ),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        config.color.withOpacity(0.35),
-                        config.color.withOpacity(0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 44,
+              interval: yInterval,
+              getTitlesWidget: (value, meta) {
+                // The scale's own ends can sit a few pixels from a grid
+                // label and overlap it.
+                if (value == meta.min || value == meta.max) {
+                  return const SizedBox.shrink();
+                }
+                return Text(Fmt.number(value, decimals: decimals), style: text);
+              },
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildKpiCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color accentColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10, width: 1),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: accentColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.8,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
-                    fontFamily: 'monospace',
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: false,
+            color: lineColor,
+            barWidth: 2,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: false),
           ),
         ],
       ),
     );
   }
+}
 
-  IconData _getMetricIcon(ObdMetricType type) {
-    switch (type) {
-      case ObdMetricType.rpm:
-        return Icons.speed_rounded;
-      case ObdMetricType.speed:
-        return Icons.navigation_rounded;
-      case ObdMetricType.coolant:
-        return Icons.thermostat_rounded;
-      case ObdMetricType.voltage:
-        return Icons.battery_charging_full_rounded;
-      case ObdMetricType.throttle:
-        return Icons.input_rounded;
-      case ObdMetricType.engineLoad:
-        return Icons.work_rounded;
-      case ObdMetricType.map:
-        return Icons.compress_rounded;
-      case ObdMetricType.fuel:
-        return Icons.local_gas_station_rounded;
-      case ObdMetricType.fuelEconomy:
-        return Icons.analytics_rounded;
-      case ObdMetricType.intakeAirTemp:
-        return Icons.ac_unit_rounded;
-      case ObdMetricType.maf:
-        return Icons.air_rounded;
-      case ObdMetricType.timingAdvance:
-        return Icons.flash_on_rounded;
-    }
+double _niceStep(double raw) {
+  if (raw <= 0 || !raw.isFinite) return 1;
+  final magnitude = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  for (final m in const [1.0, 2.0, 2.5, 5.0, 10.0]) {
+    if (raw <= m * magnitude) return m * magnitude;
+  }
+  return 10 * magnitude;
+}
+
+class _Stats extends StatelessWidget {
+  const _Stats({required this.data, required this.type});
+
+  final TelemetryHistoryData data;
+  final ObdMetricType type;
+
+  @override
+  Widget build(BuildContext context) {
+    String show(double? v) =>
+        v == null ? Fmt.pending : MetricDisplay.valueWithUnit(type, v);
+    final items = [
+      ('Saat ini', show(data.currentValue)),
+      ('Tertinggi', show(data.maxValue)),
+      ('Terendah', show(data.minValue)),
+      ('Rata-rata', show(data.avgValue)),
+    ];
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return AppCard(
+      child: Column(
+        children: [
+          for (var i = 0; i < items.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (label, value) in items.sublist(i, i + 2))
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label, style: text.bodySmall),
+                        Text(
+                          value,
+                          style: AppTheme.numberStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

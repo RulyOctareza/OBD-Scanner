@@ -23,7 +23,7 @@ void main() {
     await tester.pumpWidget(_gauge(3000)); // another PID answered, rpm same
     await tester.pump(const Duration(milliseconds: 80));
     expect(tester.hasRunningAnimations, isFalse);
-    expect(find.text('3000'), findsOneWidget);
+    expect(find.text('3.000'), findsOneWidget); // id_ID grouping
   });
 
   testWidgets('a new value animates once and then stops', (tester) async {
@@ -32,7 +32,7 @@ void main() {
     expect(tester.hasRunningAnimations, isTrue);
     await tester.pump(const Duration(milliseconds: 230));
     expect(tester.hasRunningAnimations, isFalse);
-    expect(find.text('2400'), findsOneWidget);
+    expect(find.text('2.400'), findsOneWidget);
   });
 
   testWidgets('dial is a cached track layer under a value layer', (tester) async {
