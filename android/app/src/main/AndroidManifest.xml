@@ -5,9 +5,11 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     
-    <!-- Location: classic BT discovery on older Android only (not used for GPS). -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Location: only Android 11 and older need it for classic BT discovery
+         (never used for GPS). Android 12+ scans with BLUETOOTH_SCAN
+         neverForLocation, so the app holds no location permission there. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
 
     <!-- Foreground Service: only while OBD is connected (connectedDevice). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
