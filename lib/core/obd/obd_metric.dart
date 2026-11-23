@@ -24,6 +24,8 @@ class ObdMetricConfig {
   final double minValue;
   final double maxValue;
   final double warningThreshold;
+  /// Accent of the metric. The redesign uses one accent for every metric:
+  /// colour means status, not which metric (lib/core/ui/metric_status.dart).
   final Color color;
 
   const ObdMetricConfig({
@@ -48,7 +50,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 8000,
       warningThreshold: 6000,
-      color: Color(0xFF00FFCC),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.speed,
@@ -57,7 +59,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 220,
       warningThreshold: 110,
-      color: Color(0xFF00E5FF),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.coolant,
@@ -66,7 +68,7 @@ class ObdMetricConfig {
       minValue: 50,
       maxValue: 130,
       warningThreshold: 100,
-      color: Color(0xFFFF9900),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.voltage,
@@ -75,7 +77,7 @@ class ObdMetricConfig {
       minValue: 9,
       maxValue: 16,
       warningThreshold: 11.5,
-      color: Color(0xFFD400FF),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.throttle,
@@ -84,7 +86,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 100,
       warningThreshold: 90,
-      color: Color(0xFF33FF33),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.engineLoad,
@@ -93,7 +95,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 100,
       warningThreshold: 85,
-      color: Color(0xFFFF007F),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.map,
@@ -102,7 +104,7 @@ class ObdMetricConfig {
       minValue: 20,
       maxValue: 150,
       warningThreshold: 130,
-      color: Color(0xFFFFD700),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.fuel,
@@ -111,7 +113,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 100,
       warningThreshold: 15,
-      color: Color(0xFFFFB300),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.fuelEconomy,
@@ -120,7 +122,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 30,
       warningThreshold: 5,
-      color: Color(0xFF00FF66),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.intakeAirTemp,
@@ -129,7 +131,7 @@ class ObdMetricConfig {
       minValue: -20,
       maxValue: 100,
       warningThreshold: 70,
-      color: Color(0xFF4FC3F7),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.maf,
@@ -138,7 +140,7 @@ class ObdMetricConfig {
       minValue: 0,
       maxValue: 200,
       warningThreshold: 150,
-      color: Color(0xFF80CBC4),
+      color: Color(0xFF5A9BFF),
     ),
     ObdMetricConfig(
       type: ObdMetricType.timingAdvance,
@@ -147,7 +149,7 @@ class ObdMetricConfig {
       minValue: -30,
       maxValue: 60,
       warningThreshold: 45,
-      color: Color(0xFFFFEE58),
+      color: Color(0xFF5A9BFF),
     ),
   ];
 }

@@ -11,21 +11,18 @@ import '../telemetry_provider.dart';
 import 'gauge_widget.dart';
 
 String _rangeLabel(TelemetryTimeRange range) => switch (range) {
-      TelemetryTimeRange.oneMin => '1 mnt',
-      TelemetryTimeRange.fiveMin => '5 mnt',
-      TelemetryTimeRange.fifteenMin => '15 mnt',
-      TelemetryTimeRange.oneHour => '1 jam',
-      TelemetryTimeRange.all => 'Semua',
-    };
+  TelemetryTimeRange.oneMin => '1 mnt',
+  TelemetryTimeRange.fiveMin => '5 mnt',
+  TelemetryTimeRange.fifteenMin => '15 mnt',
+  TelemetryTimeRange.oneHour => '1 jam',
+  TelemetryTimeRange.all => 'Semua',
+};
 
 /// The history of one metric as a sheet: range, line chart and statistics.
 class TelemetryChartModal extends ConsumerWidget {
   final ObdMetricType metricType;
 
-  const TelemetryChartModal({
-    super.key,
-    required this.metricType,
-  });
+  const TelemetryChartModal({super.key, required this.metricType});
 
   /// Opens on the root navigator, above the navigation bar. The dev
   /// benchmark calls this and closes the sheet through its own navigator.
@@ -48,8 +45,10 @@ class TelemetryChartModal extends ConsumerWidget {
     );
     final technical = MetricDisplay.technicalName(metricType);
 
-    final chartHeight =
-        (MediaQuery.sizeOf(context).height * 0.32).clamp(180.0, 320.0);
+    final chartHeight = (MediaQuery.sizeOf(context).height * 0.32).clamp(
+      180.0,
+      320.0,
+    );
     // Scrolls as a whole: at large text sizes or on a short screen the
     // statistics stay reachable instead of ending under the screen edge.
     return SingleChildScrollView(
@@ -86,7 +85,10 @@ class TelemetryChartModal extends ConsumerWidget {
                     children: [
                       Semantics(
                         header: true,
-                        child: Text(config.label, style: theme.textTheme.titleLarge),
+                        child: Text(
+                          config.label,
+                          style: theme.textTheme.titleLarge,
+                        ),
                       ),
                       if (technical != null)
                         Text(technical, style: theme.textTheme.bodySmall),
@@ -108,71 +110,80 @@ class TelemetryChartModal extends ConsumerWidget {
                   ChoiceChip(
                     label: Text(_rangeLabel(range)),
                     selected: range == selectedRange,
-                    onSelected: (_) => ref
-                        .read(telemetryTimeRangeProvider.notifier)
-                        .state = range,
+                    onSelected: (_) =>
+                        ref.read(telemetryTimeRangeProvider.notifier).state =
+                            range,
                   ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           historyAsync.when(
-              // Stored trip points still loading and no live samples yet.
-              loading: () => SizedBox(
-                height: chartHeight,
-                child: Center(
-                  child: Text('Memuat data grafik…',
-                      style: theme.textTheme.bodyMedium),
+            // Stored trip points still loading and no live samples yet.
+            loading: () => SizedBox(
+              height: chartHeight,
+              child: Center(
+                child: Text(
+                  'Memuat data grafik…',
+                  style: theme.textTheme.bodyMedium,
                 ),
               ),
-              error: (e, _) => EmptyState(
-                compact: true,
-                icon: Icons.error_outline_rounded,
-                title: 'Grafik gagal dimuat',
-                message: 'Tutup lalu buka lagi grafiknya.',
-              ),
-              data: (data) {
-                if (data.points.isEmpty) {
-                  return SizedBox(
-                    height: chartHeight,
-                    child: EmptyState(
-                      compact: true,
-                      icon: Icons.show_chart_rounded,
-                      title: 'Belum ada data grafik',
-                      message: isConnected
-                          ? 'Grafik terisi beberapa detik setelah nilai '
+            ),
+            error: (e, _) => EmptyState(
+              compact: true,
+              icon: Icons.error_outline_rounded,
+              title: 'Grafik gagal dimuat',
+              message: 'Tutup lalu buka lagi grafiknya.',
+            ),
+            data: (data) {
+              if (data.points.isEmpty) {
+                return SizedBox(
+                  height: chartHeight,
+                  child: EmptyState(
+                    compact: true,
+                    icon: Icons.show_chart_rounded,
+                    title: 'Belum ada data grafik',
+                    message: isConnected
+                        ? 'Grafik terisi beberapa detik setelah nilai '
                               'pertama masuk.'
-                          : 'Hubungkan adapter untuk merekam data. Grafik '
+                        : 'Hubungkan adapter untuk merekam data. Grafik '
                               'juga memakai perjalanan yang sudah terekam.',
-                    ),
-                  );
-                }
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (data.isStable)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.xl,
-                          0,
-                          AppSpacing.xl,
-                          AppSpacing.sm,
-                        ),
-                        child: Text(
-                          'Nilainya stabil pada rentang ini.',
-                          style: theme.textTheme.bodySmall,
-                        ),
+                  ),
+                );
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (data.isStable)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        0,
+                        AppSpacing.xl,
+                        AppSpacing.sm,
                       ),
-                    SizedBox(
-                      height: chartHeight,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                          AppSpacing.md,
-                          0,
-                          AppSpacing.xl,
-                          0,
-                        ),
+                      child: Text(
+                        'Nilainya stabil pada rentang ini.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  SizedBox(
+                    height: chartHeight,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.md,
+                        0,
+                        AppSpacing.xl,
+                        0,
+                      ),
+                      // The statistics below carry the numbers for a
+                      // screen reader; the line itself is decoration.
+                      child: Semantics(
+                        label:
+                            'Grafik ${config.label}, '
+                            '${_rangeLabel(selectedRange)} terakhir',
+                        excludeSemantics: true,
                         child: _Chart(
                           points: data.points,
                           config: config,
@@ -182,18 +193,19 @@ class TelemetryChartModal extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                        AppSpacing.xl,
-                      ),
-                      child: _Stats(data: data, type: metricType),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
                     ),
-                  ],
-                );
-              },
+                    child: _Stats(data: data, type: metricType),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -271,9 +283,12 @@ class _Chart extends StatelessWidget {
         ),
         borderData: FlBorderData(show: false),
         titlesData: FlTitlesData(
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -281,8 +296,9 @@ class _Chart extends StatelessWidget {
               interval: (spots.last.x / 2).clamp(1.0, double.infinity),
               getTitlesWidget: (value, meta) {
                 if (value < 0) return const SizedBox.shrink();
-                final time =
-                    firstTime.add(Duration(milliseconds: (value * 1000).toInt()));
+                final time = firstTime.add(
+                  Duration(milliseconds: (value * 1000).toInt()),
+                );
                 // fitInside keeps the first and last label within the chart
                 // instead of centring them on (and past) its edges.
                 return SideTitleWidget(
@@ -327,7 +343,9 @@ class _Chart extends StatelessWidget {
 
 double _niceStep(double raw) {
   if (raw <= 0 || !raw.isFinite) return 1;
-  final magnitude = math.pow(10, (math.log(raw) / math.ln10).floor()).toDouble();
+  final magnitude = math
+      .pow(10, (math.log(raw) / math.ln10).floor())
+      .toDouble();
   for (final m in const [1.0, 2.0, 2.5, 5.0, 10.0]) {
     if (raw <= m * magnitude) return m * magnitude;
   }

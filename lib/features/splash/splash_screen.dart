@@ -74,6 +74,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                 width: 88,
                 height: 88,
                 cacheWidth: 264,
+                excludeFromSemantics: true,
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
