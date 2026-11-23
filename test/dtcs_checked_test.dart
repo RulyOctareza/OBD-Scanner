@@ -7,17 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'obd_link/support/harness.dart';
 
 void main() {
-  obdTest('a polled mode 03 answer sets it; disconnect resets it', (h) {
+  obdTest('the first polling cycle reads codes; disconnect resets it', (h) {
     h.boot();
     expect(h.state.dtcsChecked, isFalse);
 
-    final link = h.connect();
-    expect(h.state.dtcsChecked, isFalse,
-        reason: 'connected, but no mode 03 answer yet');
+    h.startConnect();
+    expect(h.state.dtcsChecked, isFalse, reason: 'connecting, nothing read');
 
-    // The sparse DTC slot comes after a number of live-PID cycles.
-    h.seconds(60);
-    expect(link.sent, contains('03'));
+    // Mode 03 is part of the first live-PID cycle of each link.
+    h.seconds(2);
+    expect(h.status, ObdStatus.connected);
+    expect(h.link.sent, contains('03'));
     expect(h.state.dtcsChecked, isTrue);
     expect(h.state.telemetry.dtcs, isEmpty);
 
@@ -26,19 +26,27 @@ void main() {
     expect(h.state.dtcsChecked, isFalse);
   });
 
-  obdTest('a diagnostic scan sets it; a new connect resets it', (h) {
+  obdTest('a new connect resets it until its own first cycle', (h) {
+    h.boot();
+    h.connect();
+    expect(h.state.dtcsChecked, isTrue);
+
+    h.service.connectToDevice(deviceB);
+    expect(h.state.dtcsChecked, isFalse);
+
+    h.seconds(2);
+    expect(h.status, ObdStatus.connected);
+    expect(h.state.dtcsChecked, isTrue);
+  });
+
+  obdTest('a diagnostic scan keeps it and reports the codes', (h) {
     h.boot();
     h.adapter.dtcs = const ['0138']; // P0138
     h.connect();
-    expect(h.state.dtcsChecked, isFalse);
 
     h.finish(h.service.performFullDiagnosticScan());
     expect(h.state.dtcsChecked, isTrue);
     expect(h.state.telemetry.dtcs, ['P0138']);
-
-    h.service.connectToDevice(deviceB);
-    h.settle();
-    expect(h.state.dtcsChecked, isFalse);
   });
 
   obdTest('clearing codes sets it', (h) {
@@ -54,7 +62,6 @@ void main() {
   obdTest('cancelling a connect resets it', (h) {
     h.boot();
     h.connect();
-    h.seconds(60);
     expect(h.state.dtcsChecked, isTrue);
 
     h.startConnect(deviceB);

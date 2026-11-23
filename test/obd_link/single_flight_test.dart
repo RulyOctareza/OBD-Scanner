@@ -83,7 +83,49 @@ void main() {
         '01A6',
         '012F',
       ]);
-      expect(link.sent[16], 'AT RV');
+      // Stored trouble codes are read once in the first cycle, so their state
+      // is known about a second after connecting.
+      expect(link.sent.sublist(16, 18), ['03', 'AT RV']);
+    });
+
+    obdTest('C2d mode 03 is polled in the first cycle, then every 20 cycles',
+        (h) {
+      final probe = SingleFlightProbe(h.adapter);
+      h.boot();
+      final link = h.connect();
+      h.seconds(12);
+
+      final dtcPolls = [
+        for (var i = 0; i < link.sent.length; i++)
+          if (link.sent[i] == '03') i,
+      ];
+      // 4 init commands, cycle 0 with 12 PIDs + 03, cycles 1 to 19 with 12
+      // PIDs, cycle 20 with 12 PIDs + 03.
+      const firstCycle = 4 + 12;
+      const twentiethCycle = firstCycle + 1 + 19 * 12 + 12;
+      expect(dtcPolls.take(2), [firstCycle, twentiethCycle]);
+      expect(dtcPolls.length, lessThanOrEqualTo(3));
+      expect(link.sent.length, greaterThan(twentiethCycle + 1));
+      expect(probe.violations, isEmpty);
+    });
+
+    obdTest('C2e a one-shot sequence does not restart the mode 03 schedule',
+        (h) {
+      h.boot();
+      final link = h.connect();
+      h.seconds(1);
+      h.finish(
+        h.service.performFullDiagnosticScan(),
+        within: const Duration(seconds: 3),
+      );
+      final resumed = link.sent.lastIndexOf('0101') + 1;
+      h.seconds(1);
+
+      // Two full cycles after the scan: live PIDs only. The scan has just
+      // read the trouble codes itself.
+      final afterScan = link.sent.sublist(resumed, resumed + 24);
+      expect(afterScan.first, 'AT RV');
+      expect(afterScan, isNot(contains('03')));
     });
 
     obdTest('C2b no poll command is written before init has finished',

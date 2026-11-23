@@ -907,8 +907,10 @@ class ObdService extends StateNotifier<ObdState> {
   }
 
   int get _commandsPerCycle {
-    final includeDtc =
-        _pollCycleCount > 0 && _pollCycleCount % _dtcPollEveryNCycles == 0;
+    // Also in the first cycle of each link (the count resets on disconnect),
+    // so the trouble-code state is known about a second after connecting
+    // instead of ~20 cycles later.
+    final includeDtc = _pollCycleCount % _dtcPollEveryNCycles == 0;
     return _pendingCommands.length + (includeDtc ? 1 : 0);
   }
 
