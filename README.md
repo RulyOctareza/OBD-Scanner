@@ -31,16 +31,16 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/01-kesehatan.png" width="200" alt="Skor kesehatan mobil"><br><sub><b>Skor kesehatan</b></sub></td>
-    <td align="center"><img src="docs/screenshots/02-meter.png" width="200" alt="Live, meter"><br><sub><b>Live · Meter</b></sub></td>
-    <td align="center"><img src="docs/screenshots/03-sensor.png" width="200" alt="Live, sensor"><br><sub><b>Live · Sensor</b></sub></td>
-    <td align="center"><img src="docs/screenshots/04-grafik.png" width="200" alt="Grafik sensor"><br><sub><b>Grafik sensor</b></sub></td>
+    <td align="center"><img src="docs/screenshots/01-beranda.png" width="200" alt="Beranda, skor kesehatan mobil"><br><sub><b>Beranda</b></sub></td>
+    <td align="center"><img src="docs/screenshots/02-live-meter.png" width="200" alt="Live, meter"><br><sub><b>Live · Meter</b></sub></td>
+    <td align="center"><img src="docs/screenshots/03-live-sensor.png" width="200" alt="Live, sensor"><br><sub><b>Live · Sensor</b></sub></td>
+    <td align="center"><img src="docs/screenshots/04-grafik.png" width="200" alt="Live, grafik putaran mesin"><br><sub><b>Live · Grafik sensor</b></sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/05-diagnostik.png" width="200" alt="Diagnostik, hasil pemindaian"><br><sub><b>Diagnostik · Pindai</b></sub></td>
-    <td align="center"><img src="docs/screenshots/06-kamus-dtc.png" width="200" alt="Diagnostik, kamus kode"><br><sub><b>Diagnostik · Kamus kode</b></sub></td>
-    <td align="center"><img src="docs/screenshots/07-linimasa.png" width="200" alt="Riwayat isi BBM dan servis"><br><sub><b>Riwayat</b></sub></td>
-    <td align="center"><img src="docs/screenshots/08-simulator.png" width="200" alt="Mode simulator"><br><sub><b>Mode simulator</b></sub></td>
+    <td align="center"><img src="docs/screenshots/06-kamus-kode.png" width="200" alt="Diagnostik, kamus kode"><br><sub><b>Diagnostik · Kamus kode</b></sub></td>
+    <td align="center"><img src="docs/screenshots/07-riwayat.png" width="200" alt="Riwayat isi BBM dan servis"><br><sub><b>Riwayat</b></sub></td>
+    <td align="center"><img src="docs/screenshots/08-mulai.png" width="200" alt="Layar pertama: adapter atau simulator"><br><sub><b>Mulai: adapter atau simulator</b></sub></td>
   </tr>
 </table>
 

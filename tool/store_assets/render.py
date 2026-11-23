@@ -44,34 +44,34 @@ NAV_BAR_PX = 126
 # Order = Play screenshot order. Captions stay short: Play shows them small.
 SHOTS = [
     {
-        "name": "01-kesehatan",
+        "name": "01-beranda",
         "label": {"id": "Beranda", "en": "Home"},
         "id": ("Skor kesehatan mobil, langsung dari mesin",
                "Suhu mesin, aki, kode kerusakan, dan jadwal oli dalam satu skor."),
         "en": ("Your car's health at a glance",
-               "Coolant, battery, trouble codes and oil schedule in one live score."),
+               "Engine temperature, battery, trouble codes and oil schedule in one live score."),
     },
     {
-        "name": "02-meter",
+        "name": "02-live-meter",
         "label": {"id": "Live · Meter", "en": "Live · Gauges"},
         "id": ("Meter yang bisa Anda atur",
                "Putaran mesin, kecepatan, Trip A dan B, plus petunjuk Hemat."),
-        "en": ("A cockpit you can customise",
+        "en": ("Gauges you can customise",
                "Engine speed, vehicle speed, Trip A and B, plus an economy hint."),
     },
     {
-        "name": "03-sensor",
+        "name": "03-live-sensor",
         "label": {"id": "Live · Sensor", "en": "Live · Sensors"},
         "id": ("Semua sensor penting dalam satu layar",
-               "Suhu, tegangan aki, MAP, MAF, beban mesin, dan lainnya."),
+               "Suhu mesin, tegangan aki, MAP, MAF, beban mesin, dan lainnya."),
         "en": ("Every key sensor on one screen",
-               "Temperatures, battery voltage, MAP, MAF, engine load and more."),
+               "Engine temperature, battery voltage, MAP, MAF, engine load and more."),
     },
     {
         "name": "04-grafik",
         "label": {"id": "Live · Grafik sensor", "en": "Live · Sensor chart"},
         "id": ("Grafik riwayat tiap sensor",
-               "Tren 1 menit sampai 1 jam, lengkap dengan puncak dan rata-rata."),
+               "Tren 1 mnt sampai 1 jam, lengkap dengan puncak dan rata-rata."),
         "en": ("A history chart for every sensor",
                "Trends from 1 minute to 1 hour, with peak and average."),
     },
@@ -81,10 +81,10 @@ SHOTS = [
         "id": ("Pindai dan hapus kode kerusakan",
                "Kode aktif, tertunda, dan permanen, plus kesiapan uji emisi."),
         "en": ("Scan and clear trouble codes",
-               "Active, pending and permanent DTCs, plus emission readiness."),
+               "Active, pending and permanent codes, plus emission readiness."),
     },
     {
-        "name": "06-kamus-dtc",
+        "name": "06-kamus-kode",
         "label": {"id": "Diagnostik · Kamus kode", "en": "Diagnostics · Code dictionary"},
         "id": ("Arti kode kerusakan, dalam Bahasa Indonesia",
                "Gejala, kemungkinan penyebab, dan rekomendasi tindakan."),
@@ -92,22 +92,25 @@ SHOTS = [
                "Symptoms, likely causes and what to do next."),
     },
     {
-        "name": "07-linimasa",
+        # Simulator trips are never saved, so this shot cannot show a km/L
+        # figure; the caption promises only what the capture shows.
+        "name": "07-riwayat",
         "label": {"id": "Riwayat", "en": "History"},
         "id": ("Riwayat perjalanan, isi BBM, dan servis",
-               "Hitung km/L dan ingat jadwal ganti oli berikutnya."),
+               "Perjalanan tercatat otomatis, lengkap dengan total biaya mobil Anda."),
         "en": ("Trips, fuel and service history",
-               "Track your km/L and never miss the next oil change."),
+               "Trips are logged automatically, with your car's total running cost."),
     },
     {
         # The real-adapter sheet would list the phone's bonded Bluetooth devices
-        # (personal names), so the store set shows the simulator sheet instead.
-        "name": "08-simulator",
-        "label": {"id": "Mode simulator", "en": "Simulator mode"},
-        "id": ("Coba semua fitur tanpa mobil",
-               "Data contoh, termasuk mesin terlalu panas, aki lemah, dan lampu Check Engine."),
-        "en": ("Try every feature without a car",
-               "Sample data, including overheating, a weak battery and a Check Engine light."),
+        # (personal names), so the set ends on the first screen instead, which
+        # offers both the adapter and the simulator.
+        "name": "08-mulai",
+        "label": {"id": "Mulai", "en": "Get started"},
+        "id": ("Mulai dengan adapter atau simulator",
+               "Tanpa adapter? Coba semua fitur dengan data contoh."),
+        "en": ("Start with an adapter or the simulator",
+               "No adapter? Try every feature with sample data."),
     },
 ]
 
@@ -256,10 +259,9 @@ def main() -> None:
             n += 1
             title, sub = shot[key]
             framed(fonts, cropped[shot["name"]], shot["label"][key], title, sub,
-                       tmp / f"{key}-{n}.html",
-                   out_dir / f"{n}_{shot['name']}.png")
+                   tmp / f"{key}-{n}.html", out_dir / f"{n}_{shot['name']}.png")
         tagline, chips = FEATURE[key]
-        hero = cropped.get("01-kesehatan") or next(iter(cropped.values()))
+        hero = cropped.get("01-beranda") or next(iter(cropped.values()))
         feature_graphic(fonts, icon_src, hero, tagline, chips, tmp / f"{key}-feature.html",
                         meta / locale_dir / "images" / "featureGraphic.png", 1024, 500, 1.0)
         with Image.open(icon_src) as im:
@@ -267,7 +269,7 @@ def main() -> None:
                 meta / locale_dir / "images" / "icon.png", optimize=True)
         print(f"{locale_dir}: {n} screenshots, feature graphic, icon")
 
-    hero = cropped.get("01-kesehatan") or next(iter(cropped.values()))
+    hero = cropped.get("01-beranda") or next(iter(cropped.values()))
     assets = ROOT / "docs" / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     feature_graphic(fonts, icon_src, hero, FEATURE["id"][0], FEATURE["id"][1],
