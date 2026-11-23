@@ -10,20 +10,15 @@ import '../constants/app_constants.dart';
 import '../bluetooth/bluetooth_access.dart';
 import '../bluetooth/obd_service.dart';
 import '../../features/settings/presentation/settings_provider.dart';
+import '../ui/app_sheet.dart';
 
 /// Shared OBD connection bottom sheet used across Health, Meter, Sensor,
 /// Diagnostics and Settings.
 Future<void> showObdConnectionSheet(BuildContext context, WidgetRef ref) {
-  return showModalBottomSheet(
+  // Root navigator, theme shape and drag handle, and the system bar insets
+  // all come from showAppSheet.
+  return showAppSheet<void>(
     context: context,
-    backgroundColor: AppColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(
-        top: Radius.circular(AppBorderRadius.xl),
-      ),
-    ),
-    isScrollControlled: true,
-    useSafeArea: true,
     builder: (_) => const _ObdConnectionSheet(),
   );
 }
@@ -211,9 +206,9 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
         _found.remove(device.address);
       } else {
         _scanMessage = failure == null
-            ? 'Gagal menyandingkan ${device.name ?? device.address}. '
+            ? 'Gagal memasangkan ${device.name ?? device.address}. '
                   'Pastikan PIN benar (biasanya 1234 atau 0000) lalu coba lagi.'
-            : 'Gagal menyandingkan: $failure';
+            : 'Gagal memasangkan: $failure';
       }
     });
     if (paired) {
@@ -250,11 +245,10 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
     });
 
     return Padding(
-      padding: EdgeInsets.only(
+      padding: const EdgeInsets.only(
         left: AppSpacing.lg,
         right: AppSpacing.lg,
-        top: AppSpacing.md,
-        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
+        bottom: AppSpacing.lg,
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -264,23 +258,15 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.dragHandle,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
-                const Expanded(
-                  child: Text(
-                    'Koneksi OBD-II',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      'Adapter OBD',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                 ),
                 if (!link.isSimulator)
@@ -303,16 +289,15 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
                 children: [
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Mode Simulator'),
-                    subtitle: const Text('Demo sensor tanpa adapter ELM327'),
+                    title: const Text('Mode simulator'),
+                    subtitle: const Text('Data contoh tanpa adapter'),
                     value: isSimulatorPref,
-                    activeThumbColor: AppColors.warning,
                     onChanged: (val) {
                       _stopScan();
                       ref.read(settingsProvider.notifier).setSimulatorMode(val);
                     },
                   ),
-                  const Divider(color: AppColors.card),
+                  const Divider(),
                   const SizedBox(height: AppSpacing.sm),
                   if (link.isSimulator)
                     const _SimulatorNotice()
@@ -359,7 +344,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
             color: AppColors.danger,
             title: 'Gagal memuat perangkat Bluetooth',
             body: '$err',
-            actionLabel: 'Coba Lagi',
+            actionLabel: 'Coba lagi',
             onAction: () => ref.invalidate(obdDeviceListProvider),
           ),
           data: (list) {
@@ -372,12 +357,12 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _SectionLabel('Adapter tersandingkan'),
+                const _SectionLabel('Adapter yang dipasangkan'),
                 if (list.likely.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                     child: Text(
-                      'Belum ada adapter OBD yang tersandingkan. Cari perangkat '
+                      'Belum ada adapter OBD yang dipasangkan. Cari adapter '
                       'baru di bawah, atau pilih dari perangkat lain.',
                       style: TextStyle(
                         fontSize: 12,
@@ -480,8 +465,8 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
         ),
         if (!_scanning && !_scanFinished && blocked == null)
           const Text(
-            'Colokkan dongle ke port OBD, nyalakan kontak, lalu ketuk Cari. '
-            'Adapter baru akan disandingkan otomatis (PIN 1234).',
+            'Colok adapter ke port OBD, nyalakan kontak, lalu ketuk Cari. '
+            'Adapter baru dipasangkan otomatis (PIN 1234).',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ?blocked,
@@ -496,7 +481,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
           const Padding(
             padding: EdgeInsets.only(top: AppSpacing.xs),
             child: Text(
-              'Tidak ada perangkat baru ditemukan. Pastikan dongle terpasang '
+              'Tidak ada perangkat baru ditemukan. Pastikan adapter terpasang '
               'dan kontak ON. Di Android 11 ke bawah, aktifkan juga Lokasi '
               '(GPS).',
               style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
@@ -529,15 +514,15 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
           color: AppColors.textSecondary,
           title: 'Bluetooth tidak tersedia',
           body:
-              'Perangkat ini tidak mendukung Bluetooth Classic. Gunakan Mode '
-              'Simulator untuk mencoba aplikasi.',
+              'HP ini tidak mendukung Bluetooth Classic. Pakai mode '
+              'simulator untuk mencoba aplikasi.',
         );
       case BluetoothReadiness.bluetoothOff:
         return _NoticeCard(
           icon: Icons.bluetooth_disabled_rounded,
           color: AppColors.warning,
           title: 'Bluetooth mati',
-          body: 'Nyalakan Bluetooth untuk melihat dan menyambung adapter OBD.',
+          body: 'Nyalakan Bluetooth untuk melihat dan menghubungkan adapter OBD.',
           actionLabel: 'Nyalakan Bluetooth',
           onAction: () async {
             await BluetoothAccess.requestEnable();
@@ -551,7 +536,7 @@ class _ObdConnectionSheetState extends ConsumerState<_ObdConnectionSheet> {
           title: 'Izin Bluetooth diperlukan',
           body:
               'AutoCare butuh izin "Perangkat di sekitar" untuk menemukan dan '
-              'menyambung ke adapter OBD.',
+              'menghubungkan adapter OBD.',
           actionLabel: 'Izinkan',
           onAction: onResolved,
         );
@@ -586,7 +571,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text.toUpperCase(),
         style: const TextStyle(
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.1,
           color: AppColors.textSecondary,
@@ -652,13 +637,13 @@ class _LinkStatusCardState extends State<_LinkStatusCard> {
               side: const BorderSide(color: AppColors.danger),
             ),
             onPressed: widget.onDisconnect,
-            child: const Text('Putus'),
+            child: const Text('Putuskan'),
           ),
         ];
       case ObdStatus.error:
         color = AppColors.danger;
         leading = const Icon(Icons.error_outline_rounded, color: AppColors.danger);
-        title = link.errorMessage ?? 'Koneksi gagal';
+        title = link.errorMessage ?? 'Gagal terhubung';
         subtitle = null;
         actions = [
           if (link.errorHelp != null)
@@ -669,7 +654,7 @@ class _LinkStatusCardState extends State<_LinkStatusCard> {
           if (widget.onRetry != null)
             FilledButton(
               onPressed: widget.onRetry,
-              child: const Text('Coba Lagi'),
+              child: const Text('Coba lagi'),
             ),
         ];
       case ObdStatus.disconnected:
@@ -794,7 +779,7 @@ class _DeviceTile extends StatelessWidget {
           visualDensity: VisualDensity.compact,
         ),
         onPressed: onDisconnect,
-        child: const Text('Putus'),
+        child: const Text('Putuskan'),
       );
     } else if (isConnecting) {
       trailing = const SizedBox(
@@ -834,7 +819,7 @@ class _DeviceTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        device.name ?? 'Perangkat Tanpa Nama',
+        device.name ?? 'Perangkat tanpa nama',
         style: TextStyle(
           fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
         ),
@@ -883,13 +868,13 @@ class _DiscoveredTile extends StatelessWidget {
         ),
       ),
       title: Text(
-        device.name ?? 'Perangkat Tanpa Nama',
+        device.name ?? 'Perangkat tanpa nama',
         style: TextStyle(
           fontWeight: likely ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
       subtitle: Text(
-        isPairing ? 'Menyandingkan…' : device.address,
+        isPairing ? 'Memasangkan…' : device.address,
         style: const TextStyle(fontSize: 12),
       ),
       trailing: isPairing
@@ -899,7 +884,7 @@ class _DiscoveredTile extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Text(
-              'Sandingkan',
+              'Pasangkan',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -996,7 +981,7 @@ class _SimulatorNotice extends StatelessWidget {
               Icon(Icons.science_rounded, color: AppColors.warning, size: 20),
               SizedBox(width: 8),
               Text(
-                'Mode Simulator Aktif',
+                'Mode simulator aktif',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -1007,8 +992,8 @@ class _SimulatorNotice extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Aplikasi memakai data sensor demo. Matikan Mode Simulator di '
-            'atas untuk menyambung ke adapter ELM327.',
+            'Aplikasi memakai data contoh. Matikan mode simulator di '
+            'atas untuk menghubungkan adapter OBD.',
             style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -1024,7 +1009,7 @@ class _SimulatorNotice extends StatelessWidget {
                 context.go('/settings');
               },
               icon: const Icon(Icons.settings_rounded, size: 18),
-              label: const Text('Pengaturan Simulator'),
+              label: const Text('Pengaturan simulator'),
             ),
           ),
         ],
@@ -1051,12 +1036,12 @@ class ObdNotConnectedView extends StatelessWidget {
 
     final String message;
     if (isConnecting) {
-      message = state.statusDetail ?? 'Menghubungkan ke adapter OBD-II...';
+      message = state.statusDetail ?? 'Menghubungkan ke adapter OBD…';
     } else if (isError) {
       message = state.errorMessage ?? 'Koneksi terakhir gagal.';
     } else {
       message =
-          'Hubungkan adapter ELM327 atau aktifkan mode simulator untuk melihat data live.';
+          'Hubungkan adapter OBD atau nyalakan mode simulator untuk melihat data live.';
     }
 
     return Center(
@@ -1072,7 +1057,7 @@ class ObdNotConnectedView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Belum Terhubung ke Mobil',
+              'Belum terhubung ke mobil',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -1093,7 +1078,7 @@ class ObdNotConnectedView extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onConnect,
                 icon: const Icon(Icons.bluetooth_searching_rounded),
-                label: Text(isError ? 'Coba Hubungkan Lagi' : 'Hubungkan OBD'),
+                label: Text(isError ? 'Coba hubungkan lagi' : 'Hubungkan'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   padding: const EdgeInsets.symmetric(

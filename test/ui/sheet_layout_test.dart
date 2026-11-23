@@ -8,6 +8,7 @@ import 'package:autocare/core/database/database_provider.dart';
 import 'package:autocare/core/obd/obd_metric.dart';
 import 'package:autocare/core/theme/app_theme.dart';
 import 'package:autocare/core/ui/ui.dart';
+import 'package:autocare/core/widgets/obd_connection_sheet.dart';
 import 'package:autocare/features/diagnostics/presentation/dtc_detail_sheet.dart';
 import 'package:autocare/features/live_data/presentation/widgets/telemetry_chart_modal.dart';
 import 'package:drift/native.dart';
@@ -132,6 +133,46 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await _expectReachable(tester, find.text('Hapus kode'), d);
+    });
+
+    testWidgets('connection sheet fits with system bars ($tag)', (tester) async {
+      _setDevice(tester, d);
+      SharedPreferences.setMockInitialValues({});
+      final db = AppDatabase.withExecutor(NativeDatabase.memory());
+      final container = ProviderContainer(overrides: [
+        databaseProvider.overrideWithValue(db),
+        obdServiceProvider.overrideWith((ref) => _ScriptedObd(ref)),
+      ]);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) => Center(
+                child: TextButton(
+                  onPressed: () => showObdConnectionSheet(context, ref),
+                  child: const Text('Buka'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('Buka'));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(tester.takeException(), isNull);
+      expect(find.text('Adapter OBD'), findsOneWidget);
+      await _expectReachable(tester, find.text('Mode simulator'), d);
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 500));
+      container.dispose();
+      db.close();
+      await tester.pump(const Duration(milliseconds: 500));
     });
 
     testWidgets('chart sheet keeps its statistics reachable ($tag)', (tester) async {

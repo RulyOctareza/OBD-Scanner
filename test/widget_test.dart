@@ -32,7 +32,7 @@ void main() {
     expect(labels, isNot(contains('SPEEDOMETER')));
   });
 
-  testWidgets('Sensor empty state shows Hubungkan OBD CTA', (tester) async {
+  testWidgets('Not-connected view offers Hubungkan', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ObdNotConnectedView(
@@ -42,8 +42,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Belum Terhubung ke Mobil'), findsOneWidget);
-    expect(find.text('Hubungkan OBD'), findsOneWidget);
+    expect(find.text('Belum terhubung ke mobil'), findsOneWidget);
+    expect(find.text('Hubungkan'), findsOneWidget);
   });
 
   test('setObdIntroCompleted persists flag', () async {

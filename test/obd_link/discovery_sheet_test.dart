@@ -112,7 +112,7 @@ Future<FakeDiscovery> _openSheet(
   // Sheet animation, and the service's startup auto-connect window (3 s),
   // which would otherwise be a pending timer in tests that end sooner.
   await tester.pump(const Duration(seconds: 4));
-  expect(find.text('Koneksi OBD-II'), findsOneWidget);
+  expect(find.text('Adapter OBD'), findsOneWidget);
   return discovery;
 }
 
@@ -250,7 +250,7 @@ void main() {
       await tester.tap(find.byTooltip('Tutup'));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('Koneksi OBD-II'), findsNothing);
+      expect(find.text('Adapter OBD'), findsNothing);
       expect(discovery.stopCount, greaterThan(0));
 
       // The 3 s and 20 s timers of the closed sheet must not fire.
