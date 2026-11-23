@@ -45,20 +45,23 @@ NAV_BAR_PX = 126
 SHOTS = [
     {
         "name": "01-kesehatan",
+        "label": {"id": "Beranda", "en": "Home"},
         "id": ("Skor kesehatan mobil, langsung dari mesin",
-               "Suhu, aki, kode error, dan jadwal oli dirangkum jadi satu skor."),
+               "Suhu mesin, aki, kode kerusakan, dan jadwal oli dalam satu skor."),
         "en": ("Your car's health at a glance",
                "Coolant, battery, trouble codes and oil schedule in one live score."),
     },
     {
         "name": "02-meter",
-        "id": ("Meter kokpit yang bisa kamu atur",
+        "label": {"id": "Live · Meter", "en": "Live · Gauges"},
+        "id": ("Meter yang bisa Anda atur",
                "Putaran mesin, kecepatan, Trip A dan B, plus petunjuk Hemat."),
         "en": ("A cockpit you can customise",
                "Engine speed, vehicle speed, Trip A and B, plus an economy hint."),
     },
     {
         "name": "03-sensor",
+        "label": {"id": "Live · Sensor", "en": "Live · Sensors"},
         "id": ("Semua sensor penting dalam satu layar",
                "Suhu, tegangan aki, MAP, MAF, beban mesin, dan lainnya."),
         "en": ("Every key sensor on one screen",
@@ -66,6 +69,7 @@ SHOTS = [
     },
     {
         "name": "04-grafik",
+        "label": {"id": "Live · Grafik sensor", "en": "Live · Sensor chart"},
         "id": ("Grafik riwayat tiap sensor",
                "Tren 1 menit sampai 1 jam, lengkap dengan puncak dan rata-rata."),
         "en": ("A history chart for every sensor",
@@ -73,21 +77,24 @@ SHOTS = [
     },
     {
         "name": "05-diagnostik",
-        "id": ("Baca dan hapus kode Check Engine",
-               "DTC aktif, pending, dan permanen, plus status kesiapan emisi."),
-        "en": ("Read and clear Check Engine codes",
+        "label": {"id": "Diagnostik · Pindai", "en": "Diagnostics · Scan"},
+        "id": ("Pindai dan hapus kode kerusakan",
+               "Kode aktif, tertunda, dan permanen, plus kesiapan uji emisi."),
+        "en": ("Scan and clear trouble codes",
                "Active, pending and permanent DTCs, plus emission readiness."),
     },
     {
         "name": "06-kamus-dtc",
-        "id": ("Arti kode error, dalam Bahasa Indonesia",
+        "label": {"id": "Diagnostik · Kamus kode", "en": "Diagnostics · Code dictionary"},
+        "id": ("Arti kode kerusakan, dalam Bahasa Indonesia",
                "Gejala, kemungkinan penyebab, dan rekomendasi tindakan."),
         "en": ("Trouble codes, explained",
                "Symptoms, likely causes and what to do next."),
     },
     {
         "name": "07-linimasa",
-        "id": ("Riwayat perjalanan, BBM, dan servis",
+        "label": {"id": "Riwayat", "en": "History"},
+        "id": ("Riwayat perjalanan, isi BBM, dan servis",
                "Hitung km/L dan ingat jadwal ganti oli berikutnya."),
         "en": ("Trips, fuel and service history",
                "Track your km/L and never miss the next oil change."),
@@ -96,18 +103,19 @@ SHOTS = [
         # The real-adapter sheet would list the phone's bonded Bluetooth devices
         # (personal names), so the store set shows the simulator sheet instead.
         "name": "08-simulator",
+        "label": {"id": "Mode simulator", "en": "Simulator mode"},
         "id": ("Coba semua fitur tanpa mobil",
-               "Mode Simulator memakai data demo: overheat, aki lemah, Check Engine."),
+               "Data contoh, termasuk mesin terlalu panas, aki lemah, dan lampu Check Engine."),
         "en": ("Try every feature without a car",
-               "Simulator Mode uses demo data: overheating, weak battery, Check Engine."),
+               "Sample data, including overheating, a weak battery and a Check Engine light."),
     },
 ]
 
 FEATURE = {
-    "id": ("Scanner OBD2 &amp; monitor kesehatan mobil",
-           ["Skor kesehatan", "Kode Check Engine", "Live data", "Trip &amp; servis"]),
-    "en": ("OBD2 scanner &amp; car health monitor",
-           ["Health score", "Check Engine codes", "Live data", "Trips &amp; service"]),
+    "id": ("Scanner OBD2 &amp; monitor kesehatan&nbsp;mobil",
+           ["Skor kesehatan", "Kode kerusakan", "Data live", "Riwayat &amp; servis"]),
+    "en": ("OBD2 scanner &amp; car health&nbsp;monitor",
+           ["Health score", "Trouble codes", "Live data", "Trips &amp; service"]),
 }
 
 BASE_CSS = """
@@ -117,19 +125,12 @@ BASE_CSS = """
 * { box-sizing: border-box; }
 html, body { margin: 0; overflow: hidden; background: #0f1115; }
 body { font-family: InterX, sans-serif; color: #eeeeee; -webkit-font-smoothing: antialiased; }
-.bg { position: absolute; inset: 0;
-  background:
-    radial-gradient(60% 40% at 85% 0%, rgba(47,128,237,.38), transparent 70%),
-    radial-gradient(55% 35% at 0% 100%, rgba(34,197,94,.20), transparent 70%),
-    linear-gradient(180deg, #11141a 0%, #0b0d11 100%); }
-.grid { position: absolute; inset: 0; opacity: .35;
-  background-image:
-    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
-  background-size: 56px 56px; }
+/* Calm direction chosen for the app: flat dark background, no glow, no
+   gradients, one blue accent (colours from lib/core/theme). */
+.bg { position: absolute; inset: 0; background: #0f1115; }
+.eyebrow { color: #5aa2ff; font-weight: 600; letter-spacing: .4px; }
 .phone { position: absolute; background: #05070a; border-radius: 64px; padding: 16px;
-  box-shadow: 0 50px 100px rgba(0,0,0,.65), 0 0 0 2px rgba(255,255,255,.10) inset,
-              0 0 120px rgba(47,128,237,.18); }
+  border: 2px solid #262b33; box-shadow: 0 28px 56px rgba(0,0,0,.45); }
 .phone img { display: block; width: 100%; border-radius: 50px; }
 """
 
@@ -178,15 +179,17 @@ def crop_raw(raw: Path, out: Path) -> Path:
     return out
 
 
-def framed(fonts, shot_png: Path, title: str, sub: str, page: Path, out: Path) -> None:
+def framed(fonts, shot_png: Path, label: str, title: str, sub: str, page: Path,
+           out: Path) -> None:
     page.write_text(f"""<!doctype html><html><head><meta charset="utf-8"><style>{css(fonts)}
 html, body {{ width: 1080px; height: 1920px; }}
-.cap {{ position: absolute; top: 118px; left: 84px; right: 84px; text-align: center; }}
-.cap h1 {{ margin: 0 0 24px; font-size: 70px; line-height: 1.1; font-weight: 700; letter-spacing: -1.2px; }}
-.cap p {{ margin: 0; font-size: 36px; line-height: 1.38; font-weight: 400; color: #aab0b9; }}
-.phone {{ left: 170px; top: 520px; width: 740px; }}
-</style></head><body><div class="bg"></div><div class="grid"></div>
-<div class="cap"><h1>{html.escape(title)}</h1><p>{html.escape(sub)}</p></div>
+.cap {{ position: absolute; top: 96px; left: 84px; right: 84px; text-align: center; }}
+.cap .eyebrow {{ font-size: 30px; margin: 0 0 20px; }}
+.cap h1 {{ margin: 0 0 22px; font-size: 66px; line-height: 1.1; font-weight: 700; letter-spacing: -1.2px; }}
+.cap p {{ margin: 0; font-size: 34px; line-height: 1.38; font-weight: 400; color: #aab0b9; }}
+.phone {{ left: 170px; top: 540px; width: 740px; }}
+</style></head><body><div class="bg"></div>
+<div class="cap"><div class="eyebrow">{html.escape(label)}</div><h1>{html.escape(title)}</h1><p>{html.escape(sub)}</p></div>
 <div class="phone"><img src="{shot_png.resolve().as_uri()}"></div>
 </body></html>""", encoding="utf-8")
     chrome_render(page, out, 1080, 1920)
@@ -198,18 +201,17 @@ def feature_graphic(fonts, icon: Path, shot_png: Path, tagline: str, chips: list
     chip_html = "".join(f'<span class="chip">{c}</span>' for c in chips)
     page.write_text(f"""<!doctype html><html><head><meta charset="utf-8"><style>{css(fonts)}
 html, body {{ width: {width}px; height: {height}px; }}
-.left {{ position: absolute; left: {round(64*s)}px; top: 50%; transform: translateY(-50%); width: {round(600*s)}px; }}
+.left {{ position: absolute; left: {round(64*s)}px; top: 50%; transform: translateY(-50%); width: {round(540*s)}px; }}
 .brand {{ display: flex; align-items: center; gap: {round(20*s)}px; }}
-.brand img {{ width: {round(92*s)}px; height: {round(92*s)}px; border-radius: {round(22*s)}px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }}
+.brand img {{ width: {round(92*s)}px; height: {round(92*s)}px; border-radius: {round(22*s)}px; }}
 .brand h1 {{ margin: 0; font-size: {round(66*s)}px; font-weight: 700; letter-spacing: -1.5px; }}
-.tag {{ margin: {round(22*s)}px 0 {round(26*s)}px; font-size: {round(29*s)}px; line-height: 1.25; font-weight: 600;
-  background: linear-gradient(90deg, #6aa6ff, #22c55e); -webkit-background-clip: text; color: transparent; }}
+.tag {{ margin: {round(22*s)}px 0 {round(26*s)}px; font-size: {round(29*s)}px; line-height: 1.25; font-weight: 600; color: #5aa2ff; }}
 .chips {{ display: flex; flex-wrap: wrap; gap: {round(10*s)}px; }}
 .chip {{ font-size: {round(19*s)}px; font-weight: 600; color: #cfd3d9; padding: {round(8*s)}px {round(14*s)}px;
-  border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10); }}
+  border-radius: 999px; background: #171a20; border: 1px solid #262b33; }}
 .phone {{ right: {round(70*s)}px; top: {round(52*s)}px; width: {round(300*s)}px; padding: {round(9*s)}px; border-radius: {round(38*s)}px; }}
 .phone img {{ border-radius: {round(30*s)}px; }}
-</style></head><body><div class="bg"></div><div class="grid"></div>
+</style></head><body><div class="bg"></div>
 <div class="left"><div class="brand"><img src="{icon.resolve().as_uri()}"><h1>AutoCare</h1></div>
 <div class="tag">{tagline}</div><div class="chips">{chip_html}</div></div>
 <div class="phone"><img src="{shot_png.resolve().as_uri()}"></div>
@@ -253,7 +255,8 @@ def main() -> None:
                 continue
             n += 1
             title, sub = shot[key]
-            framed(fonts, cropped[shot["name"]], title, sub, tmp / f"{key}-{n}.html",
+            framed(fonts, cropped[shot["name"]], shot["label"][key], title, sub,
+                       tmp / f"{key}-{n}.html",
                    out_dir / f"{n}_{shot['name']}.png")
         tagline, chips = FEATURE[key]
         hero = cropped.get("01-kesehatan") or next(iter(cropped.values()))
