@@ -377,10 +377,14 @@ class TripRecorderNotifier extends StateNotifier<TripRecorderState> {
     if (state.maxCoolant > 105) tripHealth -= 15;
     if (state.maxCoolant > 115) tripHealth -= 20;
 
-    // Update permanent odometer settings
-    final currentOdo = _ref.read(settingsProvider).currentOdometer;
-    final newOdo = currentOdo + state.currentTripDistance;
-    _ref.read(settingsProvider.notifier).updateOdometer(newOdo);
+    // Update permanent odometer settings. An odometer never entered stays
+    // unknown: the trip distance alone is not the car's odometer.
+    final settings = _ref.read(settingsProvider);
+    if (settings.hasOdometer) {
+      _ref
+          .read(settingsProvider.notifier)
+          .updateOdometer(settings.currentOdometer + state.currentTripDistance);
+    }
 
     // Save preferences to DB
     _saveTripPreferencesToDb();

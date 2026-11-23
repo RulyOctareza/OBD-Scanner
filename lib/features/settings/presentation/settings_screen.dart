@@ -64,7 +64,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       builder: (_) => _EditValueSheet(
         title: title,
-        initial: Fmt.number(initial),
+        // 0 is a value not entered yet: the field starts empty.
+        initial: initial > 0 ? Fmt.number(initial) : '',
         suffix: 'km',
         helper: helper,
         number: true,
@@ -105,6 +106,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
 
     final oilLeft = settings.nextOilOdometer - settings.currentOdometer;
+    const notEntered = 'Belum diisi';
 
     return Scaffold(
       appBar: AppBar(
@@ -139,7 +141,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.speed_outlined,
                 title: 'Odometer',
                 subtitle: 'Dibaca dari mobil bila didukung, atau ubah manual.',
-                value: Fmt.km(settings.currentOdometer),
+                value: settings.hasOdometer
+                    ? Fmt.km(settings.currentOdometer)
+                    : notEntered,
                 onTap: () => _editKm(
                   title: 'Odometer',
                   initial: settings.currentOdometer,
@@ -150,10 +154,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SettingsRow(
                 icon: Icons.oil_barrel_outlined,
                 title: 'Ganti oli berikutnya',
-                subtitle: oilLeft >= 0
-                    ? 'Sisa ${Fmt.km(oilLeft)}'
-                    : 'Lewat ${Fmt.km(-oilLeft)} dari jadwal',
-                value: Fmt.km(settings.nextOilOdometer),
+                subtitle: !settings.hasOilSchedule
+                    ? 'Isi agar diingatkan saat waktunya ganti oli.'
+                    : !settings.hasOdometer
+                        ? 'Isi odometer untuk menghitung sisanya.'
+                        : oilLeft >= 0
+                            ? 'Sisa ${Fmt.km(oilLeft)}'
+                            : 'Lewat ${Fmt.km(-oilLeft)} dari jadwal',
+                value: settings.hasOilSchedule
+                    ? Fmt.km(settings.nextOilOdometer)
+                    : notEntered,
                 onTap: () => _editKm(
                   title: 'Ganti oli berikutnya',
                   initial: settings.nextOilOdometer,

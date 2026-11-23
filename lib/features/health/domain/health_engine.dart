@@ -14,7 +14,10 @@ enum HealthAction {
   openDiagnostics('/diagnostics', 'Buka Diagnostik'),
 
   /// Service history, to log an oil change (path `/timeline`).
-  openRiwayat('/timeline', 'Buka Riwayat');
+  openRiwayat('/timeline', 'Buka Riwayat'),
+
+  /// Settings, to enter the odometer and the oil target (path `/settings`).
+  openSettings('/settings', 'Buka Pengaturan');
 
   const HealthAction(this.route, this.label);
 
@@ -177,7 +180,7 @@ class HealthEngine {
     ObdTelemetry telemetry, {
     double? nextOilOdometer,
     double? currentOdometer,
-    String vehicleName = 'Agya',
+    String vehicleName = 'Mobil saya',
     bool dtcsChecked = false,
   }) {
     var score = 100;

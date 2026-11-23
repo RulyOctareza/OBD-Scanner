@@ -89,7 +89,7 @@ void main() {
     obd.emit(_connected());
     await settle(tester);
     expect(find.text('Terhubung'), findsOneWidget);
-    expect(find.text('Agya dalam kondisi baik'), findsOneWidget);
+    expect(find.text('Mobil saya dalam kondisi baik'), findsOneWidget);
     expect(find.text('90 °C'), findsOneWidget);
     expect(find.text('Tidak ada kode'), findsOneWidget);
 

@@ -37,6 +37,10 @@ class HealthScreen extends ConsumerWidget {
       context,
       tripRecorderProvider.select((t) => t.isRecording),
     );
+    final oilScheduleKnown = ref.watchVisible(
+      context,
+      settingsProvider.select((s) => s.hasOdometer && s.hasOilSchedule),
+    );
 
     ref.listen(tripRecorderProvider.select((t) => t.lastCompletedTripId), (
       previous,
@@ -51,11 +55,20 @@ class HealthScreen extends ConsumerWidget {
         HapticFeedback.lightImpact();
       }
     });
-    ref.listen(healthProvider.select((h) => h.warnings.length), (
-      previous,
-      next,
-    ) {
-      if (previous != null && next > previous) HapticFeedback.mediumImpact();
+    // A new warning vibrates on every tab. It is counted from the OBD state
+    // directly, not through healthProvider: a listener there would keep it
+    // refreshing on every answer while Beranda is offstage (health_provider).
+    ref.listen(obdServiceProvider, (previous, next) {
+      if (previous == null ||
+          (previous.telemetry == next.telemetry &&
+              previous.dtcsChecked == next.dtcsChecked)) {
+        return;
+      }
+      final settings = ref.read(settingsProvider);
+      if (healthReportFor(next, settings).warnings.length >
+          healthReportFor(previous, settings).warnings.length) {
+        HapticFeedback.mediumImpact();
+      }
     });
 
     // The first-run adapter path ends here with the connection sheet open.
@@ -109,7 +122,19 @@ class HealthScreen extends ConsumerWidget {
             ],
           ],
           const SectionHeader('Pemeriksaan'),
-          _ChecksCard(checks: report.checks),
+          _ChecksCard(checks: [
+            ...report.checks,
+            // A new install has no odometer: say so instead of staying silent
+            // about oil changes.
+            if (!oilScheduleKnown)
+              const CheckItem(
+                title: 'Ganti oli',
+                level: StatusLevel.noData,
+                detail: 'Belum diisi',
+                note: 'Isi odometer dan jadwalnya agar diingatkan.',
+                action: HealthAction.openSettings,
+              ),
+          ]),
           if (!isRecording) ...[
             SectionHeader(
               'Perjalanan terakhir',

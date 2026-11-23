@@ -727,6 +727,12 @@ double? _parseWhole(String text) {
 final _decimalInput = FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'));
 final _wholeInput = FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'));
 
+/// The app's odometer for a form field; empty while none was entered.
+String _odometerPrefill(WidgetRef ref) {
+  final settings = ref.read(settingsProvider);
+  return settings.hasOdometer ? Fmt.number(settings.currentOdometer) : '';
+}
+
 /// The odometer to record: what the driver typed, prefilled with the app's
 /// value. The app's odometer moves forward only.
 Future<void> _recordOdometer(WidgetRef ref, double odometer) async {
@@ -755,7 +761,7 @@ class _FuelFormState extends ConsumerState<_FuelForm> {
   void initState() {
     super.initState();
     _odometer = TextEditingController(
-      text: Fmt.number(ref.read(settingsProvider).currentOdometer),
+      text: _odometerPrefill(ref),
     );
   }
 
@@ -908,7 +914,7 @@ class _ServiceFormState extends ConsumerState<_ServiceForm> {
   void initState() {
     super.initState();
     _odometer = TextEditingController(
-      text: Fmt.number(ref.read(settingsProvider).currentOdometer),
+      text: _odometerPrefill(ref),
     );
   }
 

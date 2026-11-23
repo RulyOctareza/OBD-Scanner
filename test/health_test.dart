@@ -61,7 +61,7 @@ void main() {
       );
 
       expect(report.score, 100);
-      expect(report.statusTitle, 'Agya dalam kondisi baik');
+      expect(report.statusTitle, 'Mobil saya dalam kondisi baik');
       expect(report.warnings, isEmpty);
     });
 

@@ -7,6 +7,11 @@ import '../../../core/obd/vin_decoder.dart';
 import 'package:autocare/features/live_data/presentation/widgets/gauge_widget.dart';
 import 'package:drift/drift.dart';
 
+/// Name of the car on a new install. A new install knows nothing about the
+/// car: the odometer and the oil target stay 0 ("not entered") until the
+/// driver, a service entry or the ECU provides them.
+const String defaultVehicleName = 'Mobil saya';
+
 class SettingsState {
   final double currentOdometer;
   final double nextOilOdometer;
@@ -45,6 +50,13 @@ class SettingsState {
     required this.hasCompletedObdIntro,
     this.isLoaded = false,
   });
+
+  /// False on a new install until an odometer is entered or read.
+  bool get hasOdometer => currentOdometer > 0;
+
+  /// False on a new install until an oil target is entered or an oil change
+  /// is logged.
+  bool get hasOilSchedule => nextOilOdometer > 0;
 
   SettingsState copyWith({
     double? currentOdometer,
@@ -92,9 +104,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   SharedPreferences? _prefs;
 
   SettingsNotifier(this._ref) : super(SettingsState(
-    currentOdometer: 161420.0,
-    nextOilOdometer: 166420.0,
-    vehicleName: "Agya",
+    currentOdometer: 0,
+    nextOilOdometer: 0,
+    vehicleName: defaultVehicleName,
     vehicleVin: '',
     isSimulatorMode: false,
     isIgnitionOn: true,
@@ -149,7 +161,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
     // 2. Fallback to SharedPreferences (legacy migration) and then default values
     if (name == null) {
-      name = _prefs!.getString('vehicle_name') ?? "Agya";
+      name = _prefs!.getString('vehicle_name') ?? defaultVehicleName;
       await db.setPreference('vehicle_name', name);
     }
     vin ??= _prefs!.getString('vehicle_vin') ?? '';
@@ -157,7 +169,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await db.setPreference('vehicle_vin', vin);
     }
     if (nextOil == null) {
-      nextOil = _prefs!.getDouble('next_oil_odometer') ?? 166420.0;
+      nextOil = _prefs!.getDouble('next_oil_odometer') ?? 0;
       await db.setDoublePreference('next_oil_odometer', nextOil);
     }
     if (simMode == null) {
@@ -169,7 +181,7 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await db.setBoolPreference('is_ignition_on', ignition);
     }
     if (currentOdo == null) {
-      currentOdo = _prefs!.getDouble('current_odometer') ?? 161420.0;
+      currentOdo = _prefs!.getDouble('current_odometer') ?? 0;
       await db.setDoublePreference('current_odometer', currentOdo);
     }
     
