@@ -31,6 +31,10 @@ class DiagnosticScanResult {
   final DateTime scanTimestamp;
   final double? odometerKm;
 
+  /// False when mode 03 got no real answer: [activeDtcs] then holds the codes
+  /// already known from polling (or none), not a fresh "no codes" result.
+  final bool activeDtcsRead;
+
   DiagnosticScanResult({
     required this.protocol,
     required this.vin,
@@ -43,6 +47,7 @@ class DiagnosticScanResult {
     required this.imReadiness,
     required this.scanTimestamp,
     this.odometerKm,
+    this.activeDtcsRead = true,
   });
 }
 
@@ -60,6 +65,38 @@ class EcuVehicleIdentityResult {
     this.odometer,
     this.suggestedName,
     required this.message,
+  });
+}
+
+/// What a request to clear the stored trouble codes actually achieved, judged
+/// by reading mode 03 back afterwards rather than by the answer to mode 04.
+enum DtcClearOutcome {
+  /// The read-back reports no stored codes.
+  cleared,
+
+  /// Some codes are gone, others are still stored.
+  partial,
+
+  /// Nothing was cleared (ECUs often refuse while the engine runs).
+  rejected,
+
+  /// The read-back never answered, so nothing is known and nothing changed.
+  failed,
+}
+
+class DtcClearResult {
+  final DtcClearOutcome outcome;
+
+  /// Codes that disappeared; only these are logged as resolved.
+  final List<String> removed;
+
+  /// Codes still stored according to the read-back.
+  final List<String> remaining;
+
+  const DtcClearResult(
+    this.outcome, {
+    this.removed = const [],
+    this.remaining = const [],
   });
 }
 
@@ -207,6 +244,11 @@ class ObdService extends StateNotifier<ObdState> {
   ];
   int _currentCommandIndex = 0;
   int _pollCycleCount = 0;
+
+  // Whether a live PID got a real answer in the current poll cycle. With the
+  // ignition off the adapter still answers NO DATA to everything, so NO DATA
+  // to the cycle's mode 03 only means "no stored codes" when this is true.
+  bool _ecuAnsweredThisCycle = false;
   bool _isAwaitingResponse = false;
   DateTime? _lastActivityTime;
   bool _userRequestedDisconnect = false;
@@ -788,6 +830,7 @@ class ObdService extends StateNotifier<ObdState> {
     _isAwaitingResponse = false;
     _currentCommandIndex = 0;
     _pollCycleCount = 0;
+    _ecuAnsweredThisCycle = false;
     final pending = _pendingResponseCompleter;
     _pendingResponseCompleter = null;
     if (pending != null && !pending.isCompleted) {
@@ -822,6 +865,7 @@ class ObdService extends StateNotifier<ObdState> {
     _pollingActive = true;
     _isAwaitingResponse = false;
     _currentCommandIndex = 0;
+    _ecuAnsweredThisCycle = false;
     _rxBuffer.clear();
     _sendNextCommand();
     _pollingTimer = Timer.periodic(
@@ -919,6 +963,7 @@ class ObdService extends StateNotifier<ObdState> {
     if (_currentCommandIndex >= _commandsPerCycle) {
       _currentCommandIndex = 0;
       _pollCycleCount++;
+      _ecuAnsweredThisCycle = false;
     }
   }
 
@@ -1086,7 +1131,10 @@ class ObdService extends StateNotifier<ObdState> {
       }
     } else if (command == '01A6') {
       final val = ObdParser.parseOdometer(response);
-      if (val != null) current = current.copyWith(odometer: val);
+      if (val != null) {
+        current = current.copyWith(odometer: val);
+        _ecuAnsweredThisCycle = true;
+      }
     } else if (command == '012F') {
       metricType = ObdMetricType.fuel;
       final val = ObdParser.parseFuelLevel(response);
@@ -1095,10 +1143,18 @@ class ObdService extends StateNotifier<ObdState> {
         isValid = true;
       }
     } else if (command == '03') {
-      final val = ObdParser.parseDtc(response);
-      current = current.copyWith(dtcs: val);
-      dtcsChecked = true;
+      // Anything but a real mode 03 answer leaves the known codes alone.
+      final codes = _storedCodesFrom(
+        response,
+        ecuAlive: _ecuAnsweredThisCycle,
+      );
+      if (codes != null) {
+        current = current.copyWith(dtcs: codes);
+        dtcsChecked = true;
+      }
     }
+
+    if (isValid && command != 'AT RV') _ecuAnsweredThisCycle = true;
 
     // The sets keep their identity unless membership changes, so selects on
     // them do not fire on every response (sets compare by identity).
@@ -1153,6 +1209,7 @@ class ObdService extends StateNotifier<ObdState> {
         permanentDtcs: const [],
         imReadiness: const {},
         scanTimestamp: DateTime.now(),
+        activeDtcsRead: false,
       );
     }
 
@@ -1219,6 +1276,9 @@ class ObdService extends StateNotifier<ObdState> {
     int supportedPids = 0;
     List<String> activeDtcs = [];
     var activeDtcsRead = false;
+    // Any real ECU answer in this scan; NO DATA to mode 03 only counts as
+    // "no stored codes" with it (see _storedCodesFrom).
+    var ecuAnswered = false;
     List<String> pendingDtcs = [];
     List<String> permanentDtcs = [];
     Map<String, bool> readiness = {};
@@ -1241,6 +1301,7 @@ class ObdService extends StateNotifier<ObdState> {
         final parsedVin = ObdParser.parseVin(vinResp);
         if (parsedVin != null && parsedVin.isNotEmpty) {
           vin = parsedVin;
+          ecuAnswered = true;
         }
       } catch (e) {
         debugPrint("VIN scan error: $e");
@@ -1252,6 +1313,7 @@ class ObdService extends StateNotifier<ObdState> {
         final odoResp = await _sendAndAwaitResponse('01A6\r', timeout: const Duration(seconds: 3));
         odometerKm = ObdParser.parseOdometer(odoResp);
         if (odometerKm != null) {
+          ecuAnswered = true;
           state = state.copyWith(
             telemetry: state.telemetry.copyWith(odometer: odometerKm),
           );
@@ -1265,6 +1327,7 @@ class ObdService extends StateNotifier<ObdState> {
       try {
         final pid00Resp = await _sendAndAwaitResponse('0100\r', timeout: const Duration(seconds: 3));
         supportedPids = ObdParser.parseSupportedPidsCount(pid00Resp);
+        if (supportedPids > 0) ecuAnswered = true;
         if (supportedPids == 0) supportedPids = state.supportedSensors.length;
       } catch (e) {
         debugPrint("PID 00 scan error: $e");
@@ -1274,8 +1337,11 @@ class ObdService extends StateNotifier<ObdState> {
       onProgress?.call(0.70, 'Membaca Kode Kerusakan Aktif / MIL (Mode 03)...');
       try {
         final mode03Resp = await _sendAndAwaitResponse('03\r', timeout: const Duration(seconds: 4));
-        activeDtcs = ObdParser.parseDtc(mode03Resp);
-        activeDtcsRead = true;
+        final codes = _storedCodesFrom(mode03Resp, ecuAlive: ecuAnswered);
+        if (codes != null) {
+          activeDtcs = codes;
+          activeDtcsRead = true;
+        }
       } catch (e) {
         debugPrint("Mode 03 scan error: $e");
       }
@@ -1305,10 +1371,15 @@ class ObdService extends StateNotifier<ObdState> {
         debugPrint("PID 0101 scan error: $e");
       }
 
-      state = state.copyWith(
-        telemetry: state.telemetry.copyWith(dtcs: activeDtcs),
-        dtcsChecked: state.dtcsChecked || activeDtcsRead,
-      );
+      // An unread mode 03 must not wipe codes the polling already knows.
+      if (activeDtcsRead) {
+        state = state.copyWith(
+          telemetry: state.telemetry.copyWith(dtcs: activeDtcs),
+          dtcsChecked: true,
+        );
+      } else {
+        activeDtcs = List<String>.from(state.telemetry.dtcs);
+      }
     });
 
     final isMilOn = readiness['mil'] ?? activeDtcs.isNotEmpty;
@@ -1339,6 +1410,7 @@ class ObdService extends StateNotifier<ObdState> {
       imReadiness: readiness,
       scanTimestamp: DateTime.now(),
       odometerKm: odometerKm,
+      activeDtcsRead: activeDtcsRead,
     );
   }
 
@@ -1426,39 +1498,121 @@ class ObdService extends StateNotifier<ObdState> {
     );
   }
 
-  Future<bool> clearDtcCodes() async {
+  /// True only when the read-back confirms every stored code is gone; use
+  /// [clearTroubleCodes] to tell partial, rejected and failed apart.
+  Future<bool> clearDtcCodes() async =>
+      (await clearTroubleCodes()).outcome == DtcClearOutcome.cleared;
+
+  /// Sends mode 04 between two mode 03 reads in one exclusive run. Any answer
+  /// to 04 used to count as success, so a refused clear (7F 04, NO DATA) was
+  /// reported and logged as cleared while the codes were still stored.
+  Future<DtcClearResult> clearTroubleCodes() async {
     if (state.status != ObdStatus.connected) {
-      return false;
+      return const DtcClearResult(DtcClearOutcome.failed);
     }
-    final currentDtcs = List<String>.from(state.telemetry.dtcs);
+
     if (state.isSimulatorMode) {
+      final before = List<String>.from(state.telemetry.dtcs);
       _simulator.clearDtcs();
       state = state.copyWith(
         telemetry: state.telemetry.copyWith(dtcs: []),
         dtcsChecked: true,
       );
-    } else {
-      try {
-        await _withPollingPaused(
-          () => _sendAndAwaitResponse(
-            '04\r',
-            timeout: const Duration(seconds: 5),
-          ),
-        );
-        state = state.copyWith(
-          telemetry: state.telemetry.copyWith(dtcs: []),
-          dtcsChecked: true,
-        );
-      } catch (e) {
-        debugPrint("Failed to clear DTC codes: $e");
-        return false;
-      }
+      await _logClearedCodes(before);
+      return DtcClearResult(DtcClearOutcome.cleared, removed: before);
     }
 
+    final known = state.dtcsChecked
+        ? List<String>.from(state.telemetry.dtcs)
+        : const <String>[];
+    final (List<String>? beforeRead, String? clearReply, List<String>? after) =
+        await _withPollingPaused(() async {
+          Future<String?> ask(String command, Duration timeout) async {
+            try {
+              return await _sendAndAwaitResponse(command, timeout: timeout);
+            } catch (e) {
+              debugPrint('Clear DTC step $command failed: $e');
+              return null;
+            }
+          }
+
+          final first = await ask('03\r', const Duration(seconds: 4));
+          final reply = await ask('04\r', const Duration(seconds: 5));
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+          final second = await ask('03\r', const Duration(seconds: 4));
+          // Only a positive 44 proves the ECU is awake for the read-back; the
+          // first read counts only a real 43 answer (else the known codes).
+          final replyPositive = reply != null && !_isClearRefusal(reply);
+          return (
+            first == null ? null : _storedCodesFrom(first, ecuAlive: false),
+            reply,
+            second == null
+                ? null
+                : _storedCodesFrom(second, ecuAlive: replyPositive),
+          );
+        });
+
+    if (after == null) {
+      final refused = clearReply != null && _isClearRefusal(clearReply);
+      return DtcClearResult(
+        refused ? DtcClearOutcome.rejected : DtcClearOutcome.failed,
+        remaining: beforeRead ?? known,
+      );
+    }
+
+    final before = beforeRead ?? known;
+    final removed = before.where((code) => !after.contains(code)).toList();
+    if (mounted) {
+      state = state.copyWith(
+        telemetry: state.telemetry.copyWith(dtcs: after),
+        dtcsChecked: true,
+      );
+    }
+    await _logClearedCodes(removed);
+
+    final DtcClearOutcome outcome;
+    if (after.isEmpty) {
+      outcome = DtcClearOutcome.cleared;
+    } else if (removed.isNotEmpty) {
+      outcome = DtcClearOutcome.partial;
+    } else {
+      outcome = DtcClearOutcome.rejected;
+    }
+    return DtcClearResult(outcome, removed: removed, remaining: after);
+  }
+
+  /// Stored codes from a mode 03 reply, or null when it is not a real answer
+  /// (ERROR, '?', bus errors, SEARCHING alone). NO DATA means "no stored
+  /// codes" only with proof the ECU is awake ([ecuAlive]): some non-CAN ECUs
+  /// answer an empty mode 03 that way, but with the ignition off the adapter
+  /// answers NO DATA to everything.
+  static List<String>? _storedCodesFrom(
+    String response, {
+    required bool ecuAlive,
+  }) {
+    final compact = response.toUpperCase().replaceAll(RegExp(r'\s'), '');
+    if (compact.contains('43')) return ObdParser.parseDtc(response);
+    if (ecuAlive && compact.contains('NODATA')) return const [];
+    return null;
+  }
+
+  /// A negative answer to mode 04: an ECU rejection (7F 04 xx) or an adapter
+  /// error instead of the positive "44".
+  static bool _isClearRefusal(String response) {
+    final compact = response.toUpperCase().replaceAll(RegExp(r'\s'), '');
+    return compact.contains('7F04') ||
+        compact.contains('NODATA') ||
+        compact.contains('ERROR') ||
+        compact.contains('?') ||
+        !compact.contains('44');
+  }
+
+  Future<void> _logClearedCodes(List<String> codes) async {
+    if (codes.isEmpty) return;
     try {
       final db = _ref.read(databaseProvider);
       final now = DateTime.now();
-      for (final code in currentDtcs) {
+      for (final code in codes) {
         await db.into(db.dtcLogs).insert(
           DtcLogsCompanion.insert(
             timestamp: now,
@@ -1473,8 +1627,6 @@ class ObdService extends StateNotifier<ObdState> {
     } catch (e) {
       debugPrint("Failed to save cleared DTC log: $e");
     }
-
-    return true;
   }
 
   void _onConnectionLost() {
