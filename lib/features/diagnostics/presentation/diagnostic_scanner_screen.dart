@@ -314,8 +314,8 @@ class DtcRow extends StatelessWidget {
     final dtc = DtcRepository.getCodeInfo(code);
     return ListTile(
       leading: StatusIcon(dtcLevel(dtc.severity), size: 32),
-      title: Text(dtcSummary(code)),
-      subtitle: Text('${dtc.code} · ${dtc.severity.label}'),
+      title: WordFitText(dtcSummary(code)),
+      subtitle: WordFitText('${dtc.code} · ${dtc.severity.label}'),
       trailing: const Icon(Icons.chevron_right_rounded),
       onTap: () => showDtcDetailSheet(context, code),
     );

@@ -191,7 +191,7 @@ class _GaugeWidgetState extends State<GaugeWidget>
             Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: LineFitText(
                     config.label,
                     style: theme.textTheme.titleSmall,
                     maxLines: 1,
@@ -221,8 +221,10 @@ class _GaugeWidgetState extends State<GaugeWidget>
                   // The readout follows every animation frame in its own
                   // layer, so the rest of the screen is not re-recorded per
                   // frame and stays raster-cacheable. No text shadow: a blur
-                  // would be recomputed every frame.
-                  RepaintBoundary(
+                  // would be recomputed every frame. It is sized by the dial,
+                  // not by the system text size, which would push it onto
+                  // the scale; the value also shows in Sensor and the chart.
+                  _withDialTextSize(context, RepaintBoundary(
                     child: ValueListenableBuilder<double>(
                       valueListenable: _shown,
                       builder: (context, displayValue, _) => Column(
@@ -262,7 +264,7 @@ class _GaugeWidgetState extends State<GaugeWidget>
                         ],
                       ),
                     ),
-                  ),
+                  )),
                 ],
               ),
             ),
@@ -274,3 +276,8 @@ class _GaugeWidgetState extends State<GaugeWidget>
     );
   }
 }
+
+Widget _withDialTextSize(BuildContext context, Widget readout) =>
+    isTextEnlarged(context)
+        ? MediaQuery.withClampedTextScaling(maxScaleFactor: 1, child: readout)
+        : readout;

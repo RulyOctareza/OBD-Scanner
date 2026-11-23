@@ -4,6 +4,7 @@ import '../obd/obd_metric.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_obd.dart';
 import 'app_card.dart';
+import 'fit_text.dart';
 import 'format.dart';
 import 'metric_display.dart';
 import 'metric_status.dart';
@@ -64,11 +65,11 @@ class MetricTile extends StatelessWidget {
             : scheme.onSurface;
 
     final Widget reading = level == StatusLevel.unsupported
-        ? Text(
+        ? WordFitText(
             StatusLevel.unsupported.label,
             style: theme.textTheme.bodyLarge?.copyWith(color: status.noData),
           )
-        : Text.rich(
+        : LineFitText.rich(
             TextSpan(
               children: [
                 TextSpan(
@@ -124,7 +125,7 @@ class MetricTile extends StatelessWidget {
                   const SizedBox(width: AppSpacing.sm),
                 ],
                 Expanded(
-                  child: Text(label, style: theme.textTheme.bodyMedium),
+                  child: WordFitText(label, style: theme.textTheme.bodyMedium),
                 ),
                 if (onTap != null)
                   Icon(
@@ -244,6 +245,83 @@ class MetricRow extends StatelessWidget {
             ? status.foreground(level)
             : scheme.onSurface;
 
+    final valueStyle = level == StatusLevel.unsupported
+        ? theme.textTheme.bodyMedium?.copyWith(color: status.noData)
+        : AppTheme.numberStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
+          );
+    final iconWidth = icon == null ? 0.0 : 22.0 + AppSpacing.lg;
+
+    Widget labels() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            WordFitText(label, style: theme.textTheme.bodyLarge),
+            if (detail != null)
+              WordFitText(detail!, style: theme.textTheme.bodySmall),
+          ],
+        );
+
+    Widget row(BuildContext context, double maxWidth) {
+      // With large text the value can leave the label less room than its
+      // longest word; the value then goes under the label instead.
+      final stacked = isTextEnlarged(context) &&
+          maxWidth.isFinite &&
+          2 * AppSpacing.lg +
+                  iconWidth +
+                  measureWidestWord(context, label, theme.textTheme.bodyLarge) +
+                  AppSpacing.md +
+                  measureTextWidth(context, valueText, valueStyle) >
+              maxWidth;
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 22, color: scheme.onSurfaceVariant),
+              const SizedBox(width: AppSpacing.lg),
+            ],
+            if (stacked)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    labels(),
+                    const SizedBox(height: AppSpacing.xs),
+                    LineFitText(valueText, style: valueStyle),
+                    if (problem) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      StatusChip(level, label: assessment.note),
+                    ],
+                  ],
+                ),
+              )
+            else ...[
+              Expanded(child: labels()),
+              const SizedBox(width: AppSpacing.md),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(valueText, style: valueStyle),
+                  if (problem) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    StatusChip(level, label: assessment.note),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Semantics(
       container: true,
       button: onTap != null,
@@ -260,53 +338,12 @@ class MetricRow extends StatelessWidget {
         onTap: onTap,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 64),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            child: Row(
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 22, color: scheme.onSurfaceVariant),
-                  const SizedBox(width: AppSpacing.lg),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(label, style: theme.textTheme.bodyLarge),
-                      if (detail != null)
-                        Text(detail!, style: theme.textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      valueText,
-                      style: level == StatusLevel.unsupported
-                          ? theme.textTheme.bodyMedium
-                              ?.copyWith(color: status.noData)
-                          : AppTheme.numberStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: valueColor,
-                            ),
-                    ),
-                    if (problem) ...[
-                      const SizedBox(height: AppSpacing.xs),
-                      StatusChip(level, label: assessment.note),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
+          child: isTextEnlarged(context)
+              ? LayoutBuilder(
+                  builder: (context, constraints) =>
+                      row(context, constraints.maxWidth),
+                )
+              : row(context, double.infinity),
         ),
       ),
     );

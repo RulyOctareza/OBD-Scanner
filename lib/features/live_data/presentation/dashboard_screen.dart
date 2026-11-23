@@ -178,13 +178,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             )
           : SafeArea(
               child: isFullscreen
-                  ? _Cockpit(
-                      left: gauge(0, layout.left, compact: false),
-                      right: gauge(1, layout.right, compact: false),
-                      tiles: [for (var i = 0; i < 4; i++) tile(i)],
-                      onExit: () => ref
-                          .read(settingsProvider.notifier)
-                          .setFullscreenCockpit(false),
+                  ? _clampCockpitText(
+                      context,
+                      _Cockpit(
+                        left: gauge(0, layout.left, compact: false),
+                        right: gauge(1, layout.right, compact: false),
+                        tiles: [for (var i = 0; i < 4; i++) tile(i)],
+                        onExit: () => ref
+                            .read(settingsProvider.notifier)
+                            .setFullscreenCockpit(false),
+                      ),
                     )
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(
@@ -367,8 +370,8 @@ class _TripCounter extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: text.bodySmall),
-              Text(
+              WordFitText(label, style: text.bodySmall),
+              LineFitText(
                 value,
                 style: AppTheme.numberStyle(
                   fontSize: 16,
@@ -422,6 +425,14 @@ class _EcoChip extends StatelessWidget {
     );
   }
 }
+
+/// The cockpit fills one landscape screen without scrolling; above 1.3x
+/// system text its tiles leave the gauges too little height, so its text
+/// stops growing there.
+Widget _clampCockpitText(BuildContext context, Widget cockpit) =>
+    MediaQuery.textScalerOf(context).scale(100) > 130
+        ? MediaQuery.withClampedTextScaling(maxScaleFactor: 1.3, child: cockpit)
+        : cockpit;
 
 /// Landscape fullscreen: trips on top, two large gauges, four tiles below.
 class _Cockpit extends StatelessWidget {

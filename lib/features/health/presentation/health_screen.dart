@@ -182,9 +182,9 @@ class _HealthSummaryCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(report.statusTitle, style: text.titleMedium),
+                  WordFitText(report.statusTitle, style: text.titleMedium),
                   const SizedBox(height: AppSpacing.xs),
-                  Text(report.statusDescription, style: text.bodyMedium),
+                  WordFitText(report.statusDescription, style: text.bodyMedium),
                 ],
               ),
             ),
@@ -322,8 +322,8 @@ class _ChecksCard extends StatelessWidget {
         for (final check in checks)
           ListTile(
             leading: StatusIcon(check.level, size: 32),
-            title: Text(check.title),
-            subtitle: check.note == null ? null : Text(check.note!),
+            title: WordFitText(check.title),
+            subtitle: check.note == null ? null : WordFitText(check.note!),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

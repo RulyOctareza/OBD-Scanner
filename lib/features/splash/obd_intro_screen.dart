@@ -119,16 +119,16 @@ class _StepHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (step != null) ...[
-          Text(step!, style: theme.textTheme.labelMedium
+          WordFitText(step!, style: theme.textTheme.labelMedium
               ?.copyWith(color: theme.colorScheme.primary)),
           const SizedBox(height: AppSpacing.sm),
         ],
         Semantics(
           header: true,
-          child: Text(title, style: theme.textTheme.headlineSmall),
+          child: WordFitText(title, style: theme.textTheme.headlineSmall),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Text(text, style: theme.textTheme.bodyLarge
+        WordFitText(text, style: theme.textTheme.bodyLarge
             ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppSpacing.xl),
       ],
@@ -206,9 +206,9 @@ class _ModeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: theme.textTheme.titleMedium),
+                WordFitText(title, style: theme.textTheme.titleMedium),
                 const SizedBox(height: AppSpacing.xs),
-                Text(text, style: theme.textTheme.bodyMedium),
+                WordFitText(text, style: theme.textTheme.bodyMedium),
               ],
             ),
           ),
@@ -244,9 +244,9 @@ class _PermissionStep extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleSmall),
+                    WordFitText(title, style: theme.textTheme.titleSmall),
                     const SizedBox(height: 2),
-                    Text(text, style: theme.textTheme.bodyMedium),
+                    WordFitText(text, style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),
@@ -314,9 +314,9 @@ class _PlugInStep extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: theme.textTheme.titleSmall),
+                    WordFitText(title, style: theme.textTheme.titleSmall),
                     const SizedBox(height: 2),
-                    Text(text, style: theme.textTheme.bodyMedium),
+                    WordFitText(text, style: theme.textTheme.bodyMedium),
                   ],
                 ),
               ),

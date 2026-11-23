@@ -39,9 +39,10 @@ class _DtcDetail extends StatelessWidget {
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               StatusChip(dtcLevel(dtc.severity), label: dtc.severity.label),
-              Chip(label: Text(dtcCategoryLabel(dtc.category))),
+              InfoChip(dtcCategoryLabel(dtc.category)),
             ],
           ),
           if (known) ...[

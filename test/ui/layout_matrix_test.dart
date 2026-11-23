@@ -2,7 +2,9 @@
 // bar and a navigation bar: no layout error, and no label, title or value
 // cut off. An ellipsis raises no error, so every paragraph is checked for
 // didExceedMaxLines; only free text that the screen deliberately clips (a
-// trouble code's explanation, which its sheet shows in full) may clip.
+// trouble code's explanation, which its sheet shows in full) may clip. No
+// paragraph may break a line inside a word or cut a one-line text at its
+// edge (support/text_breaks.dart).
 import 'package:autocare/app.dart';
 import 'package:autocare/core/database/database.dart';
 import 'package:autocare/core/database/database_provider.dart';
@@ -18,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/app_fonts.dart';
+import 'support/text_breaks.dart';
 
 typedef _Device = ({double width, double height, double scale});
 
@@ -126,9 +129,13 @@ void main() {
 
       void checkClipping() {
         for (final p in tester.allRenderObjects.whereType<RenderParagraph>()) {
-          if (!p.attached || !p.didExceedMaxLines || !onstage(p)) continue;
+          if (!p.attached || !onstage(p)) continue;
           final text = p.text.toPlainText();
-          if (_mayClip(text)) continue;
+          for (final b in midWordBreaks(p)) {
+            problems.add('[$where] word broken: "$b"');
+          }
+          if (cutAtEdge(p)) problems.add('[$where] cut at edge: "$text"');
+          if (!p.didExceedMaxLines || _mayClip(text)) continue;
           problems.add('[$where] clipped: "$text"');
         }
       }
@@ -200,9 +207,13 @@ void main() {
 
       void checkClipping() {
         for (final p in tester.allRenderObjects.whereType<RenderParagraph>()) {
-          if (p.attached && p.didExceedMaxLines) {
-            problems.add('[$where] clipped: "${p.text.toPlainText()}"');
+          if (!p.attached) continue;
+          final text = p.text.toPlainText();
+          for (final b in midWordBreaks(p)) {
+            problems.add('[$where] word broken: "$b"');
           }
+          if (cutAtEdge(p)) problems.add('[$where] cut at edge: "$text"');
+          if (p.didExceedMaxLines) problems.add('[$where] clipped: "$text"');
         }
       }
 

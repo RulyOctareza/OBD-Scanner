@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'fit_text.dart';
 import 'tokens.dart';
 
 /// One row of a settings group: icon, title, optional subtitle and value.
@@ -19,7 +20,9 @@ class SettingsRow extends StatelessWidget {
   final String title;
   final String? subtitle;
 
-  /// Current value, shown on the right ("161.420 km").
+  /// Current value, shown on the right ("161.420 km"); under the title when
+  /// the system text is enlarged, where a value on the right leaves the title
+  /// and subtitle a few letters per line.
   final String? value;
   final VoidCallback? onTap;
 
@@ -30,11 +33,25 @@ class SettingsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final valueBelow = value != null && isTextEnlarged(context);
     return ListTile(
       leading: Icon(icon),
       minLeadingWidth: 24,
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
+      title: WordFitText(title),
+      subtitle: valueBelow
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LineFitText(
+                  value!,
+                  style: text.bodyLarge?.copyWith(color: scheme.onSurface),
+                ),
+                if (subtitle != null) WordFitText(subtitle!),
+              ],
+            )
+          : subtitle == null
+              ? null
+              : WordFitText(subtitle!),
       onTap: onTap,
       trailing: trailing ??
           (value == null && onTap == null
@@ -42,7 +59,7 @@ class SettingsRow extends StatelessWidget {
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (value != null)
+                    if (value != null && !valueBelow)
                       Text(value!, style: text.bodyMedium),
                     if (onTap != null) ...[
                       const SizedBox(width: AppSpacing.xs),
@@ -77,8 +94,8 @@ class SettingsSwitchRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitchListTile(
       secondary: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle == null ? null : Text(subtitle!),
+      title: WordFitText(title),
+      subtitle: subtitle == null ? null : WordFitText(subtitle!),
       value: value,
       onChanged: onChanged,
     );

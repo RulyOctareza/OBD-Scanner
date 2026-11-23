@@ -432,7 +432,13 @@ class _Header extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text('Ringkasan', style: theme.textTheme.titleSmall),
+                    // The end padding keeps a gap to the period menu when
+                    // large text fills the row; at normal size it is unused.
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                      child: WordFitText('Ringkasan',
+                          style: theme.textTheme.titleSmall),
+                    ),
                   ),
                   PopupMenuButton<DateFilter>(
                     tooltip: 'Pilih periode',
@@ -465,8 +471,21 @@ class _Header extends ConsumerWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _Stat('Jarak', Fmt.km(distance, decimals: 1))),
-                  Expanded(child: _Stat('Biaya', Fmt.rupiah(cost))),
+                  // End padding rather than gaps between the columns, so the
+                  // columns keep their places and large text still leaves
+                  // room between two values.
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: AppSpacing.md),
+                      child: _Stat('Jarak', Fmt.km(distance, decimals: 1)),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsetsDirectional.only(end: AppSpacing.md),
+                      child: _Stat('Biaya', Fmt.rupiah(cost)),
+                    ),
+                  ),
                   Expanded(
                     child: _Stat(
                       'Konsumsi rata-rata',
@@ -522,9 +541,9 @@ class _Stat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: text.bodySmall),
+        WordFitText(label, style: text.bodySmall),
         const SizedBox(height: 2),
-        Text(
+        LineFitText(
           value,
           style: AppTheme.numberStyle(
             fontSize: 16,
@@ -554,6 +573,85 @@ class _EventCard extends StatelessWidget {
         TimelineEventType.maintenance => Icons.build_rounded,
       };
 
+  Widget _titleRow(BuildContext context, double maxWidth) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final valueStyle = AppTheme.numberStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: scheme.onSurface,
+    );
+    // Card padding, icon, gaps and the menu button around title and value.
+    const fixed = AppSpacing.lg + AppSpacing.xs + 40 + AppSpacing.md +
+        AppSpacing.sm + 48;
+    // With large text the amount can leave the title less room than its
+    // longest word; the amount then goes under the title instead.
+    final stacked = maxWidth.isFinite &&
+        fixed +
+                measureWidestWord(
+                    context, event.title, theme.textTheme.titleSmall) +
+                measureTextWidth(context, event.value, valueStyle) >
+            maxWidth;
+    final title = <Widget>[
+      WordFitText(event.title, style: theme.textTheme.titleSmall),
+      WordFitText(Fmt.relative(event.timestamp),
+          style: theme.textTheme.bodySmall),
+    ];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(_icon, size: 22, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        if (stacked)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...title,
+                const SizedBox(height: AppSpacing.xs),
+                LineFitText(event.value, style: valueStyle),
+                if (event.subValue != null)
+                  WordFitText(event.subValue!,
+                      style: theme.textTheme.bodySmall),
+              ],
+            ),
+          )
+        else ...[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: title,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(event.value, style: valueStyle),
+              if (event.subValue != null)
+                Text(event.subValue!, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ],
+        PopupMenuButton<String>(
+          tooltip: 'Pilihan',
+          onSelected: (_) => onDelete(),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'delete', child: Text('Hapus')),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -569,54 +667,13 @@ class _EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_icon, size: 22, color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(event.title, style: theme.textTheme.titleSmall),
-                    Text(Fmt.relative(event.timestamp),
-                        style: theme.textTheme.bodySmall),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    event.value,
-                    style: AppTheme.numberStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                  if (event.subValue != null)
-                    Text(event.subValue!, style: theme.textTheme.bodySmall),
-                ],
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Pilihan',
-                onSelected: (_) => onDelete(),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'delete', child: Text('Hapus')),
-                ],
-              ),
-            ],
-          ),
+          if (isTextEnlarged(context))
+            LayoutBuilder(
+              builder: (context, constraints) =>
+                  _titleRow(context, constraints.maxWidth),
+            )
+          else
+            _titleRow(context, double.infinity),
           // Details take the card's full width under the title row.
           Padding(
             padding: const EdgeInsets.only(
