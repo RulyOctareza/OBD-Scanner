@@ -26,15 +26,39 @@ fi
 ls -l "$APK" > "$OUT/apk.txt"
 adb install -r "$APK" > /dev/null
 
+# CPU clusters (policy 0 and 4 on the Snapdragon 450) and GPU clocks once a
+# second, in logcat's time format, to compare clocks per scenario window
+# (tool/bench/summarize.dart). One shell loop on the phone. It must never
+# outlive its run: a leftover loop forks four processes a second on the phone
+# and skews every later measurement. So the adb client itself is backgrounded
+# (its PID is $!; backgrounding a shell function would only give a subshell's
+# PID), and stop_sampler also kills any loop left on the phone.
+SAMPLER_LOOP='while true; do echo "$(date "+%m-%d %H:%M:%S") $(cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq 2>/dev/null || echo -)"; sleep 1; done'
+sampler=""
+start_sampler() {
+  adb shell "$SAMPLER_LOOP" > "$1" 2> /dev/null < /dev/null &
+  sampler=$!
+}
+stop_sampler() {
+  if [[ -n "$sampler" ]]; then
+    kill "$sampler" 2> /dev/null || true
+    wait "$sampler" 2> /dev/null || true
+    sampler=""
+  fi
+  adb shell "pkill -f kgsl-3d0/gpuclk" > /dev/null 2>&1 || true
+}
+
 # The screen must stay on for the whole run; the user's setting is restored.
 old_stay_on=$(adb shell settings get global stay_on_while_plugged_in | tr -d '\r')
 cleanup() {
+  stop_sampler
   adb shell am force-stop "$PKG" || true
   adb shell settings put global stay_on_while_plugged_in "$old_stay_on" || true
 }
 trap cleanup EXIT
 adb shell settings put global stay_on_while_plugged_in 7
 adb shell input keyevent KEYCODE_WAKEUP
+stop_sampler  # leftovers from an earlier, interrupted run
 
 adb shell getprop ro.product.model > "$OUT/device.txt"
 adb shell getprop ro.build.version.release >> "$OUT/device.txt"
@@ -51,13 +75,6 @@ conditions() {
   adb shell dumpsys thermalservice 2>/dev/null | grep -iE 'status|temperature\{' | head -6
 }
 
-# CPU clusters (policy 0 and 4 on the Snapdragon 450) and GPU clocks once a
-# second, in logcat's time format, to compare clocks per scenario window
-# (tool/bench/summarize.dart). One shell loop on the phone, ended with it.
-freq_sampler() {
-  adb shell 'while true; do echo "$(date "+%m-%d %H:%M:%S") $(cat /sys/class/kgsl/kgsl-3d0/gpuclk 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo -) $(cat /sys/devices/system/cpu/cpu4/cpufreq/scaling_cur_freq 2>/dev/null || echo -)"; sleep 1; done'
-}
-
 # Foreground service and wake lock state of the bench process.
 fgs_check() {
   echo "== $1"
@@ -70,8 +87,7 @@ for i in $(seq 1 "$RUNS"); do
   sleep 5
   conditions > "$OUT/run$i-conditions.txt" || true
   adb logcat -c
-  freq_sampler > "$OUT/run$i-freq.txt" &
-  sampler=$!
+  start_sampler "$OUT/run$i-freq.txt"
   adb shell am start -W -n "$PKG/$ACTIVITY" > "$OUT/run$i-am-start.txt"
   started=$SECONDS
   deadline=$((SECONDS + 420))
@@ -93,7 +109,7 @@ for i in $(seq 1 "$RUNS"); do
   done
   adb exec-out run-as "$PKG" cat app_flutter/bench_results.jsonl > "$OUT/run$i.jsonl" ||
     adb logcat -d -s flutter | sed -n 's/.*AUTOCARE_BENCH //p' > "$OUT/run$i.jsonl"
-  kill "$sampler" 2> /dev/null || true
+  stop_sampler
   fgs_check "after disconnect" >> "$OUT/run$i-fgs.txt"
   adb logcat -d > "$OUT/run$i-logcat.txt"
   grep "Displayed $PKG" "$OUT/run$i-logcat.txt" > "$OUT/run$i-displayed.txt" || true
