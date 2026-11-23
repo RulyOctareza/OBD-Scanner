@@ -93,6 +93,12 @@ class ObdState {
   final bool simLowVoltage;
   final bool simHasDtc;
 
+  /// Trouble codes were read on this link (a mode 03 answer, a diagnostic
+  /// scan or a clear), so an empty `telemetry.dtcs` means "no codes" rather
+  /// than "not asked yet". Reset wherever [checkedSensors] is; always true in
+  /// simulator mode.
+  final bool dtcsChecked;
+
   ObdState({
     required this.status,
     this.errorMessage,
@@ -107,6 +113,7 @@ class ObdState {
     this.simHighTemp = false,
     this.simLowVoltage = false,
     this.simHasDtc = false,
+    this.dtcsChecked = false,
   });
 
   factory ObdState.initial() {
@@ -116,6 +123,7 @@ class ObdState {
       isSimulatorMode: false,
       supportedSensors: const {},
       checkedSensors: const {},
+      dtcsChecked: false,
     );
   }
 
@@ -133,6 +141,7 @@ class ObdState {
     bool? simHighTemp,
     bool? simLowVoltage,
     bool? simHasDtc,
+    bool? dtcsChecked,
   }) {
     return ObdState(
       status: status ?? this.status,
@@ -158,6 +167,7 @@ class ObdState {
       simHighTemp: simHighTemp ?? this.simHighTemp,
       simLowVoltage: simLowVoltage ?? this.simLowVoltage,
       simHasDtc: simHasDtc ?? this.simHasDtc,
+      dtcsChecked: dtcsChecked ?? this.dtcsChecked,
     );
   }
 }
@@ -410,6 +420,7 @@ class ObdService extends StateNotifier<ObdState> {
         statusDetail: null,
         supportedSensors: const {},
         checkedSensors: const {},
+        dtcsChecked: false,
         simHighTemp: false,
         simLowVoltage: false,
         simHasDtc: false,
@@ -429,6 +440,7 @@ class ObdService extends StateNotifier<ObdState> {
         statusDetail: null,
         supportedSensors: const {},
         checkedSensors: const {},
+        dtcsChecked: false,
         simHighTemp: false,
         simLowVoltage: false,
         simHasDtc: false,
@@ -495,6 +507,7 @@ class ObdService extends StateNotifier<ObdState> {
       connectedDeviceAddress: device.address,
       supportedSensors: const {},
       checkedSensors: const {},
+      dtcsChecked: false,
     );
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
@@ -572,6 +585,7 @@ class ObdService extends StateNotifier<ObdState> {
       errorHelp: null,
       supportedSensors: const {},
       checkedSensors: const {},
+      dtcsChecked: false,
     );
     unawaited(stopBackgroundMonitoring());
   }
@@ -754,6 +768,7 @@ class ObdService extends StateNotifier<ObdState> {
       errorHelp: null,
       supportedSensors: const {},
       checkedSensors: const {},
+      dtcsChecked: false,
     );
     unawaited(stopBackgroundMonitoring());
   }
@@ -789,6 +804,7 @@ class ObdService extends StateNotifier<ObdState> {
         telemetry: telemetry,
         supportedSensors: _allSensors,
         checkedSensors: _allSensors,
+        dtcsChecked: true,
       );
     });
   }
@@ -994,6 +1010,7 @@ class ObdService extends StateNotifier<ObdState> {
     ObdTelemetry current = state.telemetry;
     ObdMetricType? metricType;
     bool isValid = false;
+    var dtcsChecked = state.dtcsChecked;
 
     if (command == 'AT RV') {
       metricType = ObdMetricType.voltage;
@@ -1078,6 +1095,7 @@ class ObdService extends StateNotifier<ObdState> {
     } else if (command == '03') {
       final val = ObdParser.parseDtc(response);
       current = current.copyWith(dtcs: val);
+      dtcsChecked = true;
     }
 
     // The sets keep their identity unless membership changes, so selects on
@@ -1104,6 +1122,7 @@ class ObdService extends StateNotifier<ObdState> {
       telemetry: current.copyWith(timestamp: clock.now()),
       checkedSensors: checked,
       supportedSensors: supported,
+      dtcsChecked: dtcsChecked,
     );
   }
 
@@ -1197,6 +1216,7 @@ class ObdService extends StateNotifier<ObdState> {
     String vin = 'Tidak Dilaporkan ECU';
     int supportedPids = 0;
     List<String> activeDtcs = [];
+    var activeDtcsRead = false;
     List<String> pendingDtcs = [];
     List<String> permanentDtcs = [];
     Map<String, bool> readiness = {};
@@ -1253,6 +1273,7 @@ class ObdService extends StateNotifier<ObdState> {
       try {
         final mode03Resp = await _sendAndAwaitResponse('03\r', timeout: const Duration(seconds: 4));
         activeDtcs = ObdParser.parseDtc(mode03Resp);
+        activeDtcsRead = true;
       } catch (e) {
         debugPrint("Mode 03 scan error: $e");
       }
@@ -1284,6 +1305,7 @@ class ObdService extends StateNotifier<ObdState> {
 
       state = state.copyWith(
         telemetry: state.telemetry.copyWith(dtcs: activeDtcs),
+        dtcsChecked: state.dtcsChecked || activeDtcsRead,
       );
     });
 
@@ -1411,6 +1433,7 @@ class ObdService extends StateNotifier<ObdState> {
       _simulator.clearDtcs();
       state = state.copyWith(
         telemetry: state.telemetry.copyWith(dtcs: []),
+        dtcsChecked: true,
       );
     } else {
       try {
@@ -1422,6 +1445,7 @@ class ObdService extends StateNotifier<ObdState> {
         );
         state = state.copyWith(
           telemetry: state.telemetry.copyWith(dtcs: []),
+          dtcsChecked: true,
         );
       } catch (e) {
         debugPrint("Failed to clear DTC codes: $e");
