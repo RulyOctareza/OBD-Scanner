@@ -1021,7 +1021,7 @@ class ObdService extends StateNotifier<ObdState> {
 
     if (err.contains('init elm327')) {
       return (
-        message: 'Adapter tersambung, tetapi tidak menjawab perintah ELM327.',
+        message: 'Adapter terhubung, tetapi tidak menjawab.',
         help: '1. Cabut adapter selama 10 detik, lalu pasang kembali.\n'
             '2. Pastikan perangkat yang dipilih adalah adapter OBD (ELM327), '
             'bukan perangkat Bluetooth lain.\n\n'

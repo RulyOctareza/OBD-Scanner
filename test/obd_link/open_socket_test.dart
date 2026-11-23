@@ -196,7 +196,7 @@ void main() {
       expect(h.status, ObdStatus.error);
       expect(
         h.state.errorMessage,
-        'Adapter tersambung, tetapi tidak menjawab perintah ELM327.',
+        'Adapter terhubung, tetapi tidak menjawab.',
       );
       expect(h.link.disposeCount, 1);
       expect(h.link.sent, ['AT Z', 'AT Z']);
